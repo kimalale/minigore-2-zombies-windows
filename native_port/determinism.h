@@ -37,6 +37,7 @@ void det_install(elf_module_t *mod);
 /* Virtual clock (only meaningful while active) */
 uint64_t det_now_ns(void);
 void det_advance_ns(uint64_t ns);       /* game sleeps */
+void det_idle(void);                    /* a game-loop pass that drew nothing */
 double det_sim_seconds(void);           /* for the AI */
 int64_t det_wall_time(void);            /* fixed date */
 
