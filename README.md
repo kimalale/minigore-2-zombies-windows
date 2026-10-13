@@ -63,6 +63,24 @@ or run `Minigore2_Windows.exe` directly.
 
 ---
 
+## Video Options
+
+The game renders at the window's real pixel resolution, so a larger window or fullscreen gives a sharper image rather than a stretched one.
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--width <px>` / `--height <px>` | `1280` / `720` | Initial window size |
+| `--fullscreen` | off | Borderless fullscreen at desktop resolution |
+| `--msaa <n>` | `4` | Multisample anti-aliasing samples (`0` disables) |
+| `--aniso <n>` | `16` | Anisotropic filtering on mipmapped textures (clamped to the GPU maximum) |
+
+Press `F11` or `Alt+Enter` in game to toggle fullscreen. Options can also be passed to `run.bat`:
+```cmd
+run.bat --fullscreen --msaa 8
+```
+
+---
+
 ## Troubleshooting Freezes
 
 A watchdog thread monitors presented frames. If the game stops drawing for 6 seconds while the window is focused, it writes `hang_report.txt` (also printed to the console) with:
