@@ -14,6 +14,8 @@
 #include "android_ndk.h"
 #include "opensles.h"
 #include "watchdog.h"
+#include "ai_core.h"
+#include "ai_hooks.h"
 
 typedef void (*android_main_fn)(struct android_app *state);
 
@@ -54,10 +56,16 @@ static void print_usage(const char *exe) {
     printf("  --fullscreen      Start in borderless fullscreen at desktop resolution\n");
     printf("  --msaa <n>        Multisample anti-aliasing samples: 0, 2, 4, 8 (default 4)\n");
     printf("  --aniso <n>       Anisotropic filtering level: 0-16 (default 16)\n");
+    printf("  --ai <mode>       Zombie AI: smart (default) or classic\n");
+    printf("  --ai-encircle <f> Share of zombies that surround the player, 0-1 (default 0.75)\n");
+    printf("  --ai-lead <f>     How far ahead of a moving player zombies aim, 0-1 (default 0.8)\n");
+    printf("  --ai-spread <f>   How strongly zombies spread out from each other, 0-2 (default 0.4)\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
 }
 
 static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
+    AiConfig ai;
+    ai_config_default(&ai);
     cfg->width = 1280;
     cfg->height = 720;
     cfg->fullscreen = 0;
@@ -77,6 +85,22 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             cfg->msaa = atoi(argv[++i]);
         } else if (strcmp(arg, "--aniso") == 0 && has_val) {
             cfg->anisotropy = atoi(argv[++i]);
+        } else if (strcmp(arg, "--ai") == 0 && has_val) {
+            const char *mode = argv[++i];
+            if (strcmp(mode, "classic") == 0) {
+                ai.enabled = 0;
+            } else if (strcmp(mode, "smart") == 0) {
+                ai.enabled = 1;
+            } else {
+                fprintf(stderr, "Unknown AI mode: %s (use smart or classic)\n", mode);
+                return 0;
+            }
+        } else if (strcmp(arg, "--ai-encircle") == 0 && has_val) {
+            ai.flank_fraction = (float)atof(argv[++i]);
+        } else if (strcmp(arg, "--ai-lead") == 0 && has_val) {
+            ai.lead = (float)atof(argv[++i]);
+        } else if (strcmp(arg, "--ai-spread") == 0 && has_val) {
+            ai.separation = (float)atof(argv[++i]);
         } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -92,6 +116,14 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     if (cfg->msaa < 0) cfg->msaa = 0;
     if (cfg->msaa > 16) cfg->msaa = 16;
     if (cfg->anisotropy > 16) cfg->anisotropy = 16;
+    
+    if (ai.flank_fraction < 0.0f) ai.flank_fraction = 0.0f;
+    if (ai.flank_fraction > 1.0f) ai.flank_fraction = 1.0f;
+    if (ai.lead < 0.0f) ai.lead = 0.0f;
+    if (ai.lead > 1.0f) ai.lead = 1.0f;
+    if (ai.separation < 0.0f) ai.separation = 0.0f;
+    if (ai.separation > 2.0f) ai.separation = 2.0f;
+    ai_set_config(&ai);
     return 1;
 }
 
@@ -423,6 +455,7 @@ int main(int argc, char *argv[]) {
     fflush(stdout);
     elf_init(&mod);
     
+    ai_hooks_install(&mod);
     watchdog_start(&mod);
     watchdog_register_thread(GetCurrentThread(), "main");
     

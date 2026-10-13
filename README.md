@@ -81,6 +81,26 @@ run.bat --fullscreen --msaa 8
 
 ---
 
+## Smart Zombie AI
+
+By default zombies use a new pursuit AI instead of running straight at you in a line:
+
+- **Encircling:** most of the horde spreads out into evenly spaced slots around you and closes in from every side, so there's no single gap to escape through.
+- **Interception:** zombies aim where you are heading, not where you were, which makes kiting in circles much less effective.
+- **Spreading out:** zombies keep a little distance from each other instead of stacking up into a conga line.
+- A share of zombies still charge straight in, and within a few body-lengths every zombie reverts to the original chase, so lunges and attacks work exactly as before.
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--ai <smart\|classic>` | `smart` | `classic` restores the original behaviour |
+| `--ai-encircle <0-1>` | `0.75` | Share of zombies that surround you (the rest charge straight in) |
+| `--ai-lead <0-1>` | `0.8` | How far ahead of a moving player zombies aim |
+| `--ai-spread <0-2>` | `0.4` | How strongly zombies spread out from each other |
+
+The AI hooks into `ZombieStateFollow::update` in the original binary (`native_port/ai_hooks.c`); the steering itself lives in `native_port/ai_core.c`.
+
+---
+
 ## Troubleshooting Freezes
 
 A watchdog thread monitors presented frames. If the game stops drawing for 6 seconds while the window is focused, it writes `hang_report.txt` (also printed to the console) with:
