@@ -47,7 +47,9 @@ int gun_project_ground_normalized(float x, float z, float *nx, float *ny);
 
 /* Lets co-op reframe the camera: called with modifiable eye / look-at
  * vectors every time the game sets up its camera. */
-void gun_set_camera_adjust(void (*adjust)(float eye[3], float look[3]));
+void gun_set_camera_adjust(int (*adjust)(float eye[3], float look[3]));
+/* (the callback returns 1 to leave out player 1's recoil kick, e.g. while
+ * rendering player 2's view) */
 
 #ifdef __cplusplus
 }

@@ -69,6 +69,7 @@ static float g_aim_vx = 0.0f, g_aim_vy = 0.0f;
 /* Online co-op */
 static int g_coop_host = 0;
 static int g_coop_join = 0;
+static int g_coop_split = 1;
 static NetHostConfig g_host_cfg;
 static GuestConfig g_guest_cfg;
 
@@ -137,6 +138,7 @@ static void print_usage(const char *exe) {
     printf("  --coop-width <px> Video width streamed to player 2 (default 960)\n");
     printf("  --coop-fps <n>    Video frame rate streamed to player 2 (default 30)\n");
     printf("  --coop-quality <n> JPEG quality 10-95 (default 60; lower for slow connections)\n");
+    printf("  --coop-view <mode> split: each player has their own camera (default); shared: one camera\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
 }
 
@@ -219,6 +221,14 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             g_host_cfg.fps = atoi(argv[++i]);
         } else if (strcmp(arg, "--coop-quality") == 0 && has_val) {
             g_host_cfg.quality = atoi(argv[++i]);
+        } else if (strcmp(arg, "--coop-view") == 0 && has_val) {
+            const char *mode = argv[++i];
+            if (strcmp(mode, "split") == 0) g_coop_split = 1;
+            else if (strcmp(mode, "shared") == 0) g_coop_split = 0;
+            else {
+                fprintf(stderr, "Unknown co-op view: %s (use split or shared)\n", mode);
+                return 0;
+            }
         } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -693,6 +703,7 @@ int main(int argc, char *argv[]) {
     g_direct_sticks = !g_touch_sticks && gun_set_sticks(0.0f, 0.0f, 0.0f, 0.0f) != 0;
     printf("[Input] Sticks: %s\n", g_direct_sticks ? "direct (exact vectors)" : "touch emulation");
     if (g_coop_host && net_host_start(&g_host_cfg) == 0) {
+        coop_set_split_view(g_coop_split);
         coop_install(&mod);
     }
     watchdog_start(&mod);

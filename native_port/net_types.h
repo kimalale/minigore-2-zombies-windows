@@ -10,7 +10,7 @@
  * sends controller state. Every message is: u8 type, u32 length, payload. */
 
 #define NET_DEFAULT_PORT  27015
-#define NET_VERSION       1
+#define NET_VERSION       2
 #define NET_MAX_MESSAGE   (8u * 1024u * 1024u)
 #define NET_CODE_LEN      32
 
@@ -33,6 +33,8 @@ typedef struct {
     float p2_x, p2_y;         /* player 2 on screen, 0..1 (y down) */
     uint8_t in_level;
     uint8_t p2_alive;
+    float p2_health;          /* 0..1, for the guest's health bar */
+    uint8_t own_view;         /* 1: this is player 2's own camera */
 } MsgVideoHeader;
 
 /* Sticks use the game's pad convention: x right, y up, length <= 1 */

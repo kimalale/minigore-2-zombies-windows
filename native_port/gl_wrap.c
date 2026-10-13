@@ -197,7 +197,16 @@ void CDECL wrap_glBindBuffer(GLenum target, GLuint buffer) {
     if (pfn_glBindBuffer) pfn_glBindBuffer(target, buffer);
 }
 
+/* While a second view is rendered off-screen (co-op split view), the game's
+ * binds of the window framebuffer (0) go to that view's framebuffer. */
+static GLuint g_default_fbo = 0;
+
+void gl_wrap_set_default_framebuffer(GLuint fbo) {
+    g_default_fbo = fbo;
+}
+
 void CDECL wrap_glBindFramebuffer(GLenum target, GLuint framebuffer) {
+    if (framebuffer == 0) framebuffer = g_default_fbo;
     if (pfn_glBindFramebuffer) pfn_glBindFramebuffer(target, framebuffer);
 }
 

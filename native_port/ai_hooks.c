@@ -1,5 +1,6 @@
 #include "ai_hooks.h"
 #include "ai_core.h"
+#include "coop.h"
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -54,6 +55,16 @@ void ai_follow_entry(uint8_t *zombie, uint8_t *chased) __asm__("ai_follow_entry"
 __attribute__((used, force_align_arg_pointer))
 void ai_follow_entry(uint8_t *zombie, uint8_t *chased) {
     const float *zp = (const float *)(zombie + ENTITY_POS);
+    /* Co-op: chase whichever player is closer (the game only ever chases
+     * player 1; attacks already hit any player in reach) */
+    uint8_t *p2 = (uint8_t *)coop_p2_live();
+    if (p2) {
+        const float *a = (const float *)(chased + ENTITY_POS);
+        const float *b = (const float *)(p2 + ENTITY_POS);
+        float da = (a[0] - zp[0]) * (a[0] - zp[0]) + (a[1] - zp[1]) * (a[1] - zp[1]);
+        float db = (b[0] - zp[0]) * (b[0] - zp[0]) + (b[1] - zp[1]) * (b[1] - zp[1]);
+        if (db < da) chased = p2;
+    }
     const float *pp = (const float *)(chased + ENTITY_POS);
     float *target = (float *)(zombie + ZOMBIE_TARGET);
     float radius = *(const float *)(zombie + ZOMBIE_RADIUS);
@@ -82,7 +93,7 @@ void ai_follow_entry(uint8_t *zombie, uint8_t *chased) {
 
     AiVec2 z = { zp[0], zp[1] };
     AiVec2 p = { pp[0], pp[1] };
-    AiVec2 out = ai_follow_target((uintptr_t)zombie, role, z, radius, attack_radius, p, t);
+    AiVec2 out = ai_follow_target((uintptr_t)zombie, role, z, radius, attack_radius, (uintptr_t)chased, p, t);
     if (out.x != out.x || out.y != out.y) {
         out = p; /* never hand the game a NaN */
     }
