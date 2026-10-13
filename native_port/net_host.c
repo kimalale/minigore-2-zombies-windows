@@ -131,6 +131,20 @@ void net_host_set_p2(float x, float y, int alive, int in_level) {
     LeaveCriticalSection(&g_lock);
 }
 
+void net_host_set_p2_status(float health, int own_view) {
+    if (!g_active) return;
+    EnterCriticalSection(&g_lock);
+    g_p2_state.p2_health = health;
+    g_p2_state.own_view = (uint8_t)(own_view != 0);
+    LeaveCriticalSection(&g_lock);
+}
+
+static GLuint g_capture_source = 0;
+
+void net_host_set_capture_source(unsigned int fbo) {
+    g_capture_source = fbo;
+}
+
 void net_host_audio(const void *pcm, int bytes) {
     if (!g_connected || bytes <= 0) return;
     const uint8_t *src = (const uint8_t *)pcm;
@@ -221,8 +235,9 @@ void net_host_capture_frame(int width, int height) {
 
     if (ok) {
         glDisable(GL_SCISSOR_TEST); /* blits honour the scissor box */
-        /* 1: resolve the (possibly multisampled) back buffer at full size */
-        gl_bind_fb(GL_READ_FRAMEBUFFER, 0);
+        /* 1: resolve the (possibly multisampled) back buffer - or player 2's
+         * off-screen view - at full size */
+        gl_bind_fb(GL_READ_FRAMEBUFFER, g_capture_source);
         gl_bind_fb(GL_DRAW_FRAMEBUFFER, g_fb_full);
         gl_blit(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         /* 2: scale down with filtering */

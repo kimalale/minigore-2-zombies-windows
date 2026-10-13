@@ -337,9 +337,9 @@ static void __attribute__((cdecl)) h_get_weapon_info(uint8_t *info, unsigned typ
     }
 }
 
-static void (*g_camera_adjust)(float eye[3], float look[3]) = NULL;
+static int (*g_camera_adjust)(float eye[3], float look[3]) = NULL;
 
-void gun_set_camera_adjust(void (*adjust)(float eye[3], float look[3])) {
+void gun_set_camera_adjust(int (*adjust)(float eye[3], float look[3])) {
     g_camera_adjust = adjust;
 }
 
@@ -347,7 +347,7 @@ static void __attribute__((cdecl)) h_set_camera(const float *eye_in, const float
                                                 float fov, float aspect, float znear, float zfar) {
     float eye[3] = { eye_in[0], eye_in[1], eye_in[2] };
     float look[3] = { look_in[0], look_in[1], look_in[2] };
-    if (g_camera_adjust) g_camera_adjust(eye, look);
+    int no_kick = g_camera_adjust ? g_camera_adjust(eye, look) : 0;
 
     double t = now_seconds();
     double dt = t - g_kick_t;
@@ -359,7 +359,7 @@ static void __attribute__((cdecl)) h_set_camera(const float *eye_in, const float
     LONG tick = g_controls_tick;
     int in_level = tick != 0 && (LONG)GetTickCount() - tick < 150;
     uint8_t *player = in_level ? player_character() : NULL;
-    if (g_kick < 0.01f || !player) {
+    if (g_kick < 0.01f || !player || no_kick) {
         o_set_camera(eye, look, up, fov, aspect, znear, zfar);
         return;
     }

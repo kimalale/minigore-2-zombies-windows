@@ -153,7 +153,7 @@ run.bat --join 203.0.113.7
 ```
 
 - Player 2 drops in as an extra character beside you, with their own gun and health, once you start a level. If they go down they respawn after a few seconds.
-- The camera keeps both of you in view, pulling back as you spread out.
+- Each player has their own screen: player 2's view is rendered separately on the host and streamed, so you can split up and roam the map independently. Zombies chase whichever of you is closer. Player 2's screen shows their own health bar. (`--coop-view shared` instead uses one camera that keeps both of you in view.)
 - Player 2 sees your game streamed to their window (video and sound) and plays with keyboard, mouse (hold the left button to aim) or an Xbox controller. The host drives the menus.
 - If the connection drops, the guest reconnects on its own, and player 2's character falls back to the game's companion AI in the meantime.
 
@@ -167,6 +167,7 @@ run.bat --join 203.0.113.7
 | `--coop-width <px>` | `960` | Streamed video width |
 | `--coop-fps <n>` | `30` | Streamed frame rate |
 | `--coop-quality <10-95>` | `60` | JPEG quality; lower it (and the width) on slow uploads |
+| `--coop-view <split\|shared>` | `split` | Own screen per player, or one shared camera |
 
 At the defaults the stream needs roughly 8-12 Mbit/s of upload from the host; `--coop-width 640 --coop-quality 45` brings that to about 3-4 Mbit/s.
 

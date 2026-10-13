@@ -57,6 +57,7 @@
 
 typedef struct {
     uintptr_t id;
+    uintptr_t target;  /* player being chased */
     AiRole role;
     AiVec2 pos;
     float radius;
@@ -72,10 +73,17 @@ static int g_cfg_set = 0;
 static Tracked g_tracked[MAX_TRACKED];
 static int g_tracked_count = 0;
 
-static AiVec2 g_player_last;
-static double g_player_last_t = -1.0;
-static AiVec2 g_player_vel;
-static double g_last_plan_t = -1.0;
+/* Per-player state (co-op: up to MAX_PLAYERS players are chased) */
+#define MAX_PLAYERS 4
+typedef struct {
+    uintptr_t id;
+    AiVec2 last;
+    double last_t;
+    AiVec2 vel;
+    double last_plan_t;
+} PlayerTrack;
+static PlayerTrack g_players[MAX_PLAYERS];
+static AiVec2 g_player_vel; /* velocity of the player currently being planned for */
 
 void ai_config_default(AiConfig *cfg) {
     /* Tuned in simulation (twin-stick aimed gun, kiting / running /
@@ -104,9 +112,8 @@ const AiConfig *ai_get_config(void) {
 
 void ai_reset(void) {
     g_tracked_count = 0;
-    g_player_last_t = -1.0;
+    memset(g_players, 0, sizeof(g_players));
     g_player_vel.x = g_player_vel.y = 0.0f;
-    g_last_plan_t = -1.0;
 }
 
 static float clampf(float v, float lo, float hi) {
@@ -161,22 +168,31 @@ static int is_fresh(const Tracked *t, double now) {
     return now - t->last_t <= FRESH_SECONDS;
 }
 
-static void track_player(AiVec2 ppos, double now) {
-    if (g_player_last_t < 0.0) {
-        g_player_last = ppos;
-        g_player_last_t = now;
-        return;
+static PlayerTrack *track_player(uintptr_t id, AiVec2 ppos, double now) {
+    PlayerTrack *p = NULL, *oldest = &g_players[0];
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (g_players[i].id == id && g_players[i].last_t > 0.0) { p = &g_players[i]; break; }
+        if (g_players[i].last_t < oldest->last_t) oldest = &g_players[i];
     }
-    double dt = now - g_player_last_t;
-    if (dt < 0.03) return; /* many zombies update per frame; sample ~30 Hz */
-    AiVec2 v = { (float)((ppos.x - g_player_last.x) / dt), (float)((ppos.y - g_player_last.y) / dt) };
-    if (dt > 0.5) {
-        v.x = v.y = 0.0f; /* paused or teleported */
+    if (!p) {
+        p = oldest;
+        memset(p, 0, sizeof(*p));
+        p->id = id;
+        p->last = ppos;
+        p->last_t = now;
+        p->last_plan_t = -1.0;
+        return p;
     }
-    g_player_vel.x += (v.x - g_player_vel.x) * 0.3f;
-    g_player_vel.y += (v.y - g_player_vel.y) * 0.3f;
-    g_player_last = ppos;
-    g_player_last_t = now;
+    double dt = now - p->last_t;
+    if (dt >= 0.03) { /* many zombies update per frame; sample ~30 Hz */
+        AiVec2 v = { (float)((ppos.x - p->last.x) / dt), (float)((ppos.y - p->last.y) / dt) };
+        if (dt > 0.5) v.x = v.y = 0.0f; /* paused or teleported */
+        p->vel.x += (v.x - p->vel.x) * 0.3f;
+        p->vel.y += (v.y - p->vel.y) * 0.3f;
+        p->last = ppos;
+        p->last_t = now;
+    }
+    return p;
 }
 
 static Tracked *track_enemy(uintptr_t id, AiRole role, AiVec2 zpos, float radius, double now) {
@@ -228,7 +244,7 @@ static void sort_by_key(int *order, const float *key, int n) {
  * angular order. With a boss engaged they fill an arc on the far side of
  * the player from it; otherwise the whole circle, rotated as little as
  * possible from where they already are. */
-static void plan_melee_slots(AiVec2 ppos, float r, double now) {
+static void plan_melee_slots(uintptr_t player, AiVec2 ppos, float r, double now) {
     static int order[MAX_TRACKED];
     static float bearing[MAX_TRACKED];
     static float key[MAX_TRACKED];
@@ -241,7 +257,7 @@ static void plan_melee_slots(AiVec2 ppos, float r, double now) {
     if (cfg->boss_tactics) {
         for (int i = 0; i < g_tracked_count; i++) {
             const Tracked *t = &g_tracked[i];
-            if (t->role != AI_ROLE_BOSS || !is_fresh(t, now)) continue;
+            if (t->role != AI_ROLE_BOSS || t->target != player || !is_fresh(t, now)) continue;
             float d = len2((AiVec2){ t->pos.x - ppos.x, t->pos.y - ppos.y });
             if (d < boss_dist) {
                 boss_dist = d;
@@ -257,7 +273,7 @@ static void plan_melee_slots(AiVec2 ppos, float r, double now) {
     int n = 0;
     for (int i = 0; i < g_tracked_count; i++) {
         Tracked *t = &g_tracked[i];
-        if (t->role != AI_ROLE_MELEE) continue;
+        if (t->role != AI_ROLE_MELEE || t->target != player) continue;
         t->has_slot = 0;
         if (!is_fresh(t, now) || !is_flanker(t->id, cfg->flank_fraction)) continue;
         AiVec2 dv = { t->pos.x - ppos.x, t->pos.y - ppos.y };
@@ -301,13 +317,13 @@ static void plan_melee_slots(AiVec2 ppos, float r, double now) {
 
 /* Ranged: spread throwers evenly around the player in a formation that
  * rotates slowly, so they attack from different sides and keep moving. */
-static void plan_ranged_slots(AiVec2 ppos, double now) {
+static void plan_ranged_slots(uintptr_t player, AiVec2 ppos, double now) {
     static int order[MAX_TRACKED];
     static float bearing[MAX_TRACKED];
     int n = 0;
     for (int i = 0; i < g_tracked_count; i++) {
         Tracked *t = &g_tracked[i];
-        if (t->role != AI_ROLE_RANGED) continue;
+        if (t->role != AI_ROLE_RANGED || t->target != player) continue;
         t->has_slot = 0;
         if (!is_fresh(t, now)) continue;
         bearing[i] = atan2f(t->pos.y - ppos.y, t->pos.x - ppos.x);
@@ -449,21 +465,23 @@ static AiVec2 steer_boss(Tracked *self, AiVec2 zpos, float r, AiVec2 ppos, float
 }
 
 AiVec2 ai_follow_target(uintptr_t enemy_id, AiRole role, AiVec2 zpos, float zradius,
-                        float attack_radius, AiVec2 ppos, double now_s) {
+                        float attack_radius, uintptr_t player_id, AiVec2 ppos, double now_s) {
     const AiConfig *cfg = ai_get_config();
     if (!cfg->enabled) return ppos;
     if (role == AI_ROLE_RANGED && (!cfg->ranged_tactics || attack_radius <= 0.0f)) role = AI_ROLE_MELEE;
     if (role == AI_ROLE_BOSS && !cfg->boss_tactics) role = AI_ROLE_MELEE;
 
     float r = zradius > 1e-3f ? zradius : 1e-3f;
-    track_player(ppos, now_s);
+    PlayerTrack *player = track_player(player_id, ppos, now_s);
+    g_player_vel = player->vel;
     Tracked *self = track_enemy(enemy_id, role, zpos, r, now_s);
     if (!self) return ppos;
+    self->target = player_id;
 
-    if (g_last_plan_t < 0.0 || now_s - g_last_plan_t > PLAN_INTERVAL) {
-        plan_melee_slots(ppos, r, now_s);
-        plan_ranged_slots(ppos, now_s);
-        g_last_plan_t = now_s;
+    if (player->last_plan_t < 0.0 || now_s - player->last_plan_t > PLAN_INTERVAL) {
+        plan_melee_slots(player_id, ppos, r, now_s);
+        plan_ranged_slots(player_id, ppos, now_s);
+        player->last_plan_t = now_s;
     }
 
     float d = len2((AiVec2){ ppos.x - zpos.x, ppos.y - zpos.y });

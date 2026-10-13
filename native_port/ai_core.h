@@ -40,12 +40,13 @@ const AiConfig *ai_get_config(void);
  *   role           how it fights
  *   zpos, zradius  position and collision radius (sets the scale)
  *   attack_radius  distance from the player at which it can attack
- *   ppos           position of the player it is chasing
+ *   player_id      the player it is chasing (co-op: zombies split between players)
+ *   ppos           that player's position
  *   now_s          monotonic time in seconds
  * Melee and boss enemies use the original target (ppos) within a few radii
  * of the player, so the final lunge and attack logic behave as before. */
 AiVec2 ai_follow_target(uintptr_t enemy_id, AiRole role, AiVec2 zpos, float zradius,
-                        float attack_radius, AiVec2 ppos, double now_s);
+                        float attack_radius, uintptr_t player_id, AiVec2 ppos, double now_s);
 
 /* Role of an enemy that has followed the player recently (for aim
  * assist). Returns 0 if it isn't tracked. */

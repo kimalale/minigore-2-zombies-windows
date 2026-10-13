@@ -29,6 +29,10 @@ int net_host_get_input(MsgInput *out, unsigned max_age_ms);
 void net_host_capture_frame(int width, int height);
 /* Game thread: player 2's on-screen position (0..1) for guest mouse aim. */
 void net_host_set_p2(float x, float y, int alive, int in_level);
+/* Game thread: player 2's health (0..1) and whether frames show their own view. */
+void net_host_set_p2_status(float health, int own_view);
+/* Game thread: framebuffer to stream from (0 = the window). */
+void net_host_set_capture_source(unsigned int fbo);
 /* Audio thread: the final 44.1 kHz stereo s16 mix. */
 void net_host_audio(const void *pcm, int bytes);
 

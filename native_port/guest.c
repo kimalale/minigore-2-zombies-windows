@@ -217,8 +217,15 @@ int guest_main(const GuestConfig *cfg) {
             info = g_frame_info;
             g_frame_new = 0;
         }
-        if (strcmp(shown_status, g_status) != 0) {
-            strcpy(shown_status, g_status);
+        /* Status in the title bar: connection state, or "down" while respawning */
+        char status[512];
+        if (g_sock != INVALID_SOCKET && g_frame_info.in_level && !g_frame_info.p2_alive) {
+            snprintf(status, sizeof(status), "You're down - respawning...");
+        } else {
+            snprintf(status, sizeof(status), "%s", g_status);
+        }
+        if (strcmp(shown_status, status) != 0) {
+            strcpy(shown_status, status);
             char title[600];
             snprintf(title, sizeof(title), "Minigore 2 - Player 2 - %s", shown_status);
             SDL_SetWindowTitle(win, title);
@@ -303,6 +310,19 @@ int guest_main(const GuestConfig *cfg) {
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
         SDL_RenderClear(ren);
         if (tex) SDL_RenderCopy(ren, tex, NULL, &view);
+
+        /* Player 2's own health bar (the host's HUD shows player 1) */
+        if (tex && info.in_level && info.p2_alive) {
+            int bw = view.w / 4, bh = view.h / 40 + 4;
+            SDL_Rect back = { view.x + view.w / 40, view.y + view.h - bh - view.h / 30, bw, bh };
+            SDL_Rect fill = { back.x + 2, back.y + 2, (int)((bw - 4) * info.p2_health), bh - 4 };
+            SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(ren, 0, 0, 0, 170);
+            SDL_RenderFillRect(ren, &back);
+            Uint8 red = (Uint8)(255 * (1.0f - info.p2_health)), green = (Uint8)(220 * info.p2_health);
+            SDL_SetRenderDrawColor(ren, red, green, 40, 255);
+            SDL_RenderFillRect(ren, &fill);
+        }
         SDL_RenderPresent(ren);
         Uint32 spent = SDL_GetTicks() - frame_start;
         if (spent < 16) SDL_Delay(16 - spent); /* ~60 Hz even without vsync */
