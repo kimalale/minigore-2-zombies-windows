@@ -56,6 +56,8 @@ struct AInputQueue {
     int dummy;
 };
 
+#define MAX_TOUCH_POINTERS 3
+
 typedef struct {
     int type; /* 1: key, 2: motion */
     int source;
@@ -68,7 +70,7 @@ typedef struct {
         int id;
         float x;
         float y;
-    } pointers[2];
+    } pointers[MAX_TOUCH_POINTERS];
 } NativeInputEvent;
 
 #define MAX_EVENTS 256
@@ -206,22 +208,24 @@ void android_app_push_cmd(int8_t cmd) {
     if (g_looper_event) SetEvent(g_looper_event);
 }
 
-void android_app_push_motion_event(int action, int pointer_count, float x0, float y0, float x1, float y1) {
+void android_app_push_touch(int action, int count, const int *ids, const float *xs, const float *ys) {
+    if (count < 1) return;
+    if (count > MAX_TOUCH_POINTERS) count = MAX_TOUCH_POINTERS;
     EnterCriticalSection(&g_queue_cs);
 
-    /* Coalesce consecutive MOVEs: while the game thread is busy (level
-     * loads, hitches) a held mouse or stick generates hundreds of moves per
-     * second. They used to fill the queue, after which the matching UP /
-     * POINTER_UP was dropped and the game kept a phantom finger down, making
-     * controls appear frozen. Only the latest position matters. */
+    /* Coalesce consecutive MOVEs of the same fingers: while the game thread
+     * is busy (level loads, hitches) held sticks generate hundreds of moves
+     * per second. Only the latest positions matter. */
     if (action == AMOTION_EVENT_ACTION_MOVE && g_event_head != g_event_tail) {
         NativeInputEvent *last = &g_event_queue[(g_event_head + MAX_EVENTS - 1) % MAX_EVENTS];
-        if (last->type == AINPUT_EVENT_TYPE_MOTION && last->action == AMOTION_EVENT_ACTION_MOVE &&
-            last->pointer_count == pointer_count) {
-            last->pointers[0].x = x0;
-            last->pointers[0].y = y0;
-            last->pointers[1].x = x1;
-            last->pointers[1].y = y1;
+        int same = last->type == AINPUT_EVENT_TYPE_MOTION && last->action == AMOTION_EVENT_ACTION_MOVE &&
+                   last->pointer_count == count;
+        for (int i = 0; same && i < count; i++) same = last->pointers[i].id == ids[i];
+        if (same) {
+            for (int i = 0; i < count; i++) {
+                last->pointers[i].x = xs[i];
+                last->pointers[i].y = ys[i];
+            }
             LeaveCriticalSection(&g_queue_cs);
             if (g_looper_event) SetEvent(g_looper_event);
             return;
@@ -233,18 +237,16 @@ void android_app_push_motion_event(int action, int pointer_count, float x0, floa
         printf("[NDK] Input queue full, dropping motion event (action 0x%x)\n", action);
     } else {
         NativeInputEvent *ev = &g_event_queue[g_event_head];
+        memset(ev, 0, sizeof(*ev));
         ev->type = AINPUT_EVENT_TYPE_MOTION;
         ev->source = AINPUT_SOURCE_TOUCHSCREEN;
         ev->action = action;
-        ev->flags = 0;
-        ev->metaState = 0;
-        ev->pointer_count = pointer_count;
-        ev->pointers[0].id = 0;
-        ev->pointers[0].x = x0;
-        ev->pointers[0].y = y0;
-        ev->pointers[1].id = 1;
-        ev->pointers[1].x = x1;
-        ev->pointers[1].y = y1;
+        ev->pointer_count = count;
+        for (int i = 0; i < count; i++) {
+            ev->pointers[i].id = ids[i];
+            ev->pointers[i].x = xs[i];
+            ev->pointers[i].y = ys[i];
+        }
         g_event_head = next;
     }
     LeaveCriticalSection(&g_queue_cs);
@@ -531,21 +533,21 @@ size_t CDECL wrap_AMotionEvent_getPointerCount(const AInputEvent *event) {
 int32_t CDECL wrap_AMotionEvent_getPointerId(const AInputEvent *event, size_t pointer_index) {
     if (!event) return (int32_t)pointer_index;
     NativeInputEvent *ev = (NativeInputEvent *)event;
-    if (pointer_index < 2) return ev->pointers[pointer_index].id;
+    if (pointer_index < (size_t)ev->pointer_count && pointer_index < MAX_TOUCH_POINTERS) return ev->pointers[pointer_index].id;
     return (int32_t)pointer_index;
 }
 
 float CDECL wrap_AMotionEvent_getX(const AInputEvent *event, size_t pointer_index) {
     if (!event) return 0.0f;
     NativeInputEvent *ev = (NativeInputEvent *)event;
-    if (pointer_index < 2) return ev->pointers[pointer_index].x;
+    if (pointer_index < (size_t)ev->pointer_count && pointer_index < MAX_TOUCH_POINTERS) return ev->pointers[pointer_index].x;
     return 0.0f;
 }
 
 float CDECL wrap_AMotionEvent_getY(const AInputEvent *event, size_t pointer_index) {
     if (!event) return 0.0f;
     NativeInputEvent *ev = (NativeInputEvent *)event;
-    if (pointer_index < 2) return ev->pointers[pointer_index].y;
+    if (pointer_index < (size_t)ev->pointer_count && pointer_index < MAX_TOUCH_POINTERS) return ev->pointers[pointer_index].y;
     return 0.0f;
 }
 

@@ -154,7 +154,9 @@ struct android_app {
 void android_ndk_init(int width, int height);
 struct android_app *android_app_get(void);
 void android_app_push_cmd(int8_t cmd);
-void android_app_push_motion_event(int action, int pointer_count, float x0, float y0, float x1, float y1);
+/* Queues a touch event. ids[] are stable finger IDs; the game tracks each
+ * finger by ID from its DOWN / POINTER_DOWN to its UP / POINTER_UP. */
+void android_app_push_touch(int action, int count, const int *ids, const float *xs, const float *ys);
 void android_app_push_key_event(int action, int keycode);
 void android_app_set_window_size(int width, int height);
 int android_app_input_queue_depth(void);

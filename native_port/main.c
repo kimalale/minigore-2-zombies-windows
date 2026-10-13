@@ -259,51 +259,79 @@ static void toggle_fullscreen(void) {
     SDL_SetWindowFullscreen(g_window, is_full ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
 }
 
-static void update_touch_events(void) {
-    bool right_active = g_mouse_active || g_aim_active;
-    float right_x = g_mouse_active ? g_mouse_x : g_aim_x;
-    float right_y = g_mouse_active ? g_mouse_y : g_aim_y;
-    
-    if (g_wasd_active && right_active) {
-        /* Dual touch: pointer 0 is movement, pointer 1 is aim/action */
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_MOVE, 2,
-                                      g_wasd_x, g_wasd_y,
-                                      right_x, right_y);
-    } else if (g_wasd_active) {
-        /* Single touch: movement */
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_MOVE, 1,
-                                      g_wasd_x, g_wasd_y,
-                                      0.0f, 0.0f);
-    } else if (right_active) {
-        /* Single touch: mouse / aim */
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_MOVE, 1,
-                                      right_x, right_y,
-                                      0.0f, 0.0f);
+/* Touch emulation with stable finger IDs. The game tracks each finger by
+ * its ID from DOWN to UP and crashes on a MOVE for an ID it never saw go
+ * down. IDs used to follow list position, so e.g. releasing the move stick
+ * while aiming turned the aim finger into the just-released ID 0 - a
+ * normal "stop walking while shooting" crashed the game. */
+enum { FINGER_MOVE = 0, FINGER_AIM = 1, FINGER_TAP = 2, FINGER_COUNT = 3 };
+static bool g_finger_down[FINGER_COUNT];
+static float g_finger_x[FINGER_COUNT], g_finger_y[FINGER_COUNT];
+
+/* Fingers that are down (plus `extra`, if >= 0), in ID order. Returns the
+ * count; *index gets the position of `extra` in the list. */
+static int finger_list(int extra, int *ids, float *xs, float *ys, int *index) {
+    int n = 0;
+    for (int f = 0; f < FINGER_COUNT; f++) {
+        if (!g_finger_down[f] && f != extra) continue;
+        if (f == extra && index) *index = n;
+        ids[n] = f;
+        xs[n] = g_finger_x[f];
+        ys[n] = g_finger_y[f];
+        n++;
     }
+    return n;
+}
+
+static void finger_move_all(void) {
+    int ids[FINGER_COUNT];
+    float xs[FINGER_COUNT], ys[FINGER_COUNT];
+    int n = finger_list(-1, ids, xs, ys, NULL);
+    if (n > 0) android_app_push_touch(AMOTION_EVENT_ACTION_MOVE, n, ids, xs, ys);
+}
+
+static void finger_set(int finger, bool down, float x, float y) {
+    int ids[FINGER_COUNT], index = 0;
+    float xs[FINGER_COUNT], ys[FINGER_COUNT];
+    g_finger_x[finger] = x;
+    g_finger_y[finger] = y;
+    if (down == g_finger_down[finger]) {
+        if (down) finger_move_all();
+        return;
+    }
+    int n = finger_list(finger, ids, xs, ys, &index);
+    int action;
+    if (down) {
+        action = n == 1 ? AMOTION_EVENT_ACTION_DOWN
+                        : AMOTION_EVENT_ACTION_POINTER_DOWN | (index << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);
+    } else {
+        action = n == 1 ? AMOTION_EVENT_ACTION_UP
+                        : AMOTION_EVENT_ACTION_POINTER_UP | (index << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);
+    }
+    g_finger_down[finger] = down;
+    android_app_push_touch(action, n, ids, xs, ys);
+}
+
+static void update_touch_events(void) {
+    if (g_mouse_active) {
+        g_finger_x[FINGER_TAP] = g_mouse_x;
+        g_finger_y[FINGER_TAP] = g_mouse_y;
+    }
+    finger_move_all();
 }
 
 static void touch_press(float x, float y) {
     g_mouse_active = true;
     g_mouse_x = x;
     g_mouse_y = y;
-    if (g_wasd_active) {
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_DOWN | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                      2, g_wasd_x, g_wasd_y, g_mouse_x, g_mouse_y);
-    } else {
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_DOWN, 1, g_mouse_x, g_mouse_y, 0.0f, 0.0f);
-    }
+    finger_set(FINGER_TAP, true, x, y);
 }
 
 static void touch_release(float x, float y) {
     g_mouse_active = false;
     g_mouse_x = x;
     g_mouse_y = y;
-    if (g_wasd_active) {
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_UP | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                      2, g_wasd_x, g_wasd_y, g_mouse_x, g_mouse_y);
-    } else {
-        android_app_push_motion_event(AMOTION_EVENT_ACTION_UP, 1, g_mouse_x, g_mouse_y, 0.0f, 0.0f);
-    }
+    finger_set(FINGER_TAP, false, x, y);
 }
 
 static void update_wasd_stick(void) {
@@ -343,35 +371,11 @@ static void update_wasd_stick(void) {
         g_wasd_x = base_x + dx * radius;
         g_wasd_y = base_y + dy * radius;
         
-        if (!g_wasd_active) {
-            g_wasd_active = true;
-            bool right_active = g_mouse_active || g_aim_active;
-            float right_x = g_mouse_active ? g_mouse_x : g_aim_x;
-            float right_y = g_mouse_active ? g_mouse_y : g_aim_y;
-            if (right_active) {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_DOWN | (0 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                              2, g_wasd_x, g_wasd_y, right_x, right_y);
-            } else {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_DOWN, 1,
-                                              g_wasd_x, g_wasd_y, 0.0f, 0.0f);
-            }
-        } else {
-            update_touch_events();
-        }
-    } else {
-        if (g_wasd_active) {
-            g_wasd_active = false;
-            bool right_active = g_mouse_active || g_aim_active;
-            float right_x = g_mouse_active ? g_mouse_x : g_aim_x;
-            float right_y = g_mouse_active ? g_mouse_y : g_aim_y;
-            if (right_active) {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_UP | (0 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                              2, g_wasd_x, g_wasd_y, right_x, right_y);
-            } else {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_UP, 1,
-                                              g_wasd_x, g_wasd_y, 0.0f, 0.0f);
-            }
-        }
+        g_wasd_active = true;
+        finger_set(FINGER_MOVE, true, g_wasd_x, g_wasd_y);
+    } else if (g_wasd_active) {
+        g_wasd_active = false;
+        finger_set(FINGER_MOVE, false, g_wasd_x, g_wasd_y);
     }
 }
 
@@ -442,29 +446,11 @@ static void update_aim_stick(void) {
         g_aim_x = base_x + dx * radius;
         g_aim_y = base_y + dy * radius;
         
-        if (!g_aim_active) {
-            g_aim_active = true;
-            if (g_wasd_active) {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_DOWN | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                              2, g_wasd_x, g_wasd_y, g_aim_x, g_aim_y);
-            } else {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_DOWN, 1,
-                                              g_aim_x, g_aim_y, 0.0f, 0.0f);
-            }
-        } else {
-            update_touch_events();
-        }
-    } else {
-        if (g_aim_active) {
-            g_aim_active = false;
-            if (g_wasd_active) {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_UP | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                              2, g_wasd_x, g_wasd_y, g_aim_x, g_aim_y);
-            } else {
-                android_app_push_motion_event(AMOTION_EVENT_ACTION_UP, 1,
-                                              g_aim_x, g_aim_y, 0.0f, 0.0f);
-            }
-        }
+        g_aim_active = true;
+        finger_set(FINGER_AIM, true, g_aim_x, g_aim_y);
+    } else if (g_aim_active) {
+        g_aim_active = false;
+        finger_set(FINGER_AIM, false, g_aim_x, g_aim_y);
     }
 }
 
