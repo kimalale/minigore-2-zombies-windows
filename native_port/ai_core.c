@@ -57,6 +57,7 @@
 
 typedef struct {
     uintptr_t id;
+    uint32_t tag;      /* order first seen: stable across runs, unlike the address */
     uintptr_t target;  /* player being chased */
     AiRole role;
     AiVec2 pos;
@@ -72,6 +73,7 @@ static int g_cfg_set = 0;
 
 static Tracked g_tracked[MAX_TRACKED];
 static int g_tracked_count = 0;
+static uint32_t g_next_tag = 0;
 
 /* Per-player state (co-op: up to MAX_PLAYERS players are chased) */
 #define MAX_PLAYERS 4
@@ -112,6 +114,7 @@ const AiConfig *ai_get_config(void) {
 
 void ai_reset(void) {
     g_tracked_count = 0;
+    g_next_tag = 0;
     memset(g_players, 0, sizeof(g_players));
     g_player_vel.x = g_player_vel.y = 0.0f;
 }
@@ -134,8 +137,8 @@ static AiVec2 normalized(AiVec2 v) {
     return r;
 }
 
-static uint32_t hash_id(uintptr_t id) {
-    uint32_t x = (uint32_t)id;
+static uint32_t hash_id(uint32_t id) {
+    uint32_t x = id;
     x ^= x >> 16; x *= 0x7feb352du;
     x ^= x >> 15; x *= 0x846ca68bu;
     x ^= x >> 16;
@@ -143,7 +146,7 @@ static uint32_t hash_id(uintptr_t id) {
 }
 
 /* Rushers charge straight in; the rest take part in encircling */
-static int is_flanker(uintptr_t id, float fraction) {
+static int is_flanker(uint32_t id, float fraction) {
     float u = (float)(hash_id(id) & 0xFFFF) / 65535.0f;
     return u < fraction;
 }
@@ -212,6 +215,7 @@ static Tracked *track_enemy(uintptr_t id, AiRole role, AiVec2 zpos, float radius
         found = &g_tracked[g_tracked_count++];
         memset(found, 0, sizeof(*found));
         found->id = id;
+        found->tag = ++g_next_tag;
         found->pos = zpos;
         found->last_t = now;
     } else {
@@ -275,7 +279,7 @@ static void plan_melee_slots(uintptr_t player, AiVec2 ppos, float r, double now)
         Tracked *t = &g_tracked[i];
         if (t->role != AI_ROLE_MELEE || t->target != player) continue;
         t->has_slot = 0;
-        if (!is_fresh(t, now) || !is_flanker(t->id, cfg->flank_fraction)) continue;
+        if (!is_fresh(t, now) || !is_flanker(t->tag, cfg->flank_fraction)) continue;
         AiVec2 dv = { t->pos.x - ppos.x, t->pos.y - ppos.y };
         if (len2(dv) > engage) continue;
         bearing[i] = atan2f(dv.y, dv.x);
@@ -435,7 +439,7 @@ static AiVec2 steer_ranged(Tracked *self, AiVec2 zpos, float r, float attack_rad
     /* Player is rushing us: back off at full speed */
     if (d < attack_radius * RETREAT) {
         AiVec2 tangent = { -away.y, away.x };
-        float side = (hash_id(self->id) & 1) ? 1.0f : -1.0f;
+        float side = (hash_id(self->tag) & 1) ? 1.0f : -1.0f;
         AiVec2 dir = normalized((AiVec2){ away.x + tangent.x * side * 0.3f, away.y + tangent.y * side * 0.3f });
         float dist = standoff > 4.0f * r ? standoff : 4.0f * r;
         return (AiVec2){ zpos.x + dir.x * dist, zpos.y + dir.y * dist };
