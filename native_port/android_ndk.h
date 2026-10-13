@@ -159,6 +159,7 @@ void android_app_push_cmd(int8_t cmd);
 void android_app_push_touch(int action, int count, const int *ids, const float *xs, const float *ys);
 void android_app_push_key_event(int action, int keycode);
 void android_app_set_window_size(int width, int height);
+void android_app_set_data_path(const char *path);  /* before android_ndk_init */
 int android_app_input_queue_depth(void);
 int android_app_is_destroy_requested(void);
 

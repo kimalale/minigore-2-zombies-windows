@@ -1,4 +1,5 @@
 #include "android_ndk.h"
+#include "determinism.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,6 +93,11 @@ static int g_cmd_head = 0;
 static int g_cmd_tail = 0;
 
 static CRITICAL_SECTION g_queue_cs;
+static const char *g_data_path = "saves/";
+
+void android_app_set_data_path(const char *path) {
+    if (path) g_data_path = path;
+}
 static HANDLE g_looper_event = NULL;
 
 /* CPU family constants */
@@ -179,8 +185,8 @@ void android_ndk_init(int width, int height) {
     fake_activity.vm = &g_dummy_jvm;
     fake_activity.clazz = (void *)1;
     fake_activity.assetManager = &g_asset_manager;
-    fake_activity.internalDataPath = "saves/";
-    fake_activity.externalDataPath = "saves/";
+    fake_activity.internalDataPath = g_data_path;
+    fake_activity.externalDataPath = g_data_path;
     fake_activity.sdkVersion = 19;
     g_app.activity = &fake_activity;
     
@@ -209,7 +215,7 @@ void android_app_push_cmd(int8_t cmd) {
 }
 
 void android_app_push_touch(int action, int count, const int *ids, const float *xs, const float *ys) {
-    if (count < 1) return;
+    if (count < 1 || det_replaying()) return;
     if (count > MAX_TOUCH_POINTERS) count = MAX_TOUCH_POINTERS;
     EnterCriticalSection(&g_queue_cs);
 
@@ -254,6 +260,7 @@ void android_app_push_touch(int action, int count, const int *ids, const float *
 }
 
 void android_app_push_key_event(int action, int keycode) {
+    if (det_replaying()) return;
     EnterCriticalSection(&g_queue_cs);
     int next = (g_event_head + 1) % MAX_EVENTS;
     if (next != g_event_tail) {
@@ -454,7 +461,7 @@ int CDECL wrap_ALooper_pollAll(int timeoutMillis, int *outFd, int *outEvents, vo
             LeaveCriticalSection(&g_queue_cs);
             return LOOPER_ID_MAIN;
         }
-        if (g_event_head != g_event_tail) {
+        if (g_event_head != g_event_tail || det_replay_pending()) {
             if (outData) *outData = &g_app.inputPollSource;
             LeaveCriticalSection(&g_queue_cs);
             return LOOPER_ID_INPUT;
@@ -481,6 +488,15 @@ void CDECL wrap_AInputQueue_attachLooper(AInputQueue *queue, ALooper *looper, in
 void CDECL wrap_AInputQueue_detachLooper(AInputQueue *queue) {}
 
 int32_t CDECL wrap_AInputQueue_getEvent(AInputQueue *queue, AInputEvent **outEvent) {
+    if (det_replaying()) {
+        /* Determinism replay: the recorded events, frame by frame */
+        NativeInputEvent tmp;
+        if (!det_replay_event(&tmp, sizeof(tmp))) return -1;
+        NativeInputEvent *ev = (NativeInputEvent *)malloc(sizeof(NativeInputEvent));
+        *ev = tmp;
+        *outEvent = (AInputEvent *)ev;
+        return 0;
+    }
     EnterCriticalSection(&g_queue_cs);
     if (g_event_head != g_event_tail) {
         NativeInputEvent *ev = (NativeInputEvent *)malloc(sizeof(NativeInputEvent));
@@ -488,6 +504,7 @@ int32_t CDECL wrap_AInputQueue_getEvent(AInputQueue *queue, AInputEvent **outEve
         g_event_tail = (g_event_tail + 1) % MAX_EVENTS;
         *outEvent = (AInputEvent *)ev;
         LeaveCriticalSection(&g_queue_cs);
+        det_record_event(ev, sizeof(*ev));
         return 0;
     }
     LeaveCriticalSection(&g_queue_cs);

@@ -20,6 +20,7 @@
 #include "watchdog.h"
 #include "log.h"
 #include "java_stubs.h"
+#include "determinism.h"
 #include "ai_core.h"
 #include "ai_hooks.h"
 #include "gun_hooks.h"
@@ -139,6 +140,9 @@ static void print_usage(const char *exe) {
     printf("  --coop-fps <n>    Video frame rate streamed to player 2 (default 30)\n");
     printf("  --coop-quality <n> JPEG quality 10-95 (default 60; lower for slow connections)\n");
     printf("  --coop-view <mode> split: each player has their own camera (default); shared: one camera\n");
+    printf("Determinism test (for future lockstep multiplayer):\n");
+    printf("  --record <file>   Play normally; inputs and per-frame game state are recorded\n");
+    printf("  --replay <file>   Replay the inputs and report any frame where the game state differs\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
 }
 
@@ -221,6 +225,10 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             g_host_cfg.fps = atoi(argv[++i]);
         } else if (strcmp(arg, "--coop-quality") == 0 && has_val) {
             g_host_cfg.quality = atoi(argv[++i]);
+        } else if (strcmp(arg, "--record") == 0 && has_val) {
+            det_configure(DET_RECORD, argv[++i]);
+        } else if (strcmp(arg, "--replay") == 0 && has_val) {
+            det_configure(DET_REPLAY, argv[++i]);
         } else if (strcmp(arg, "--coop-view") == 0 && has_val) {
             const char *mode = argv[++i];
             if (strcmp(mode, "split") == 0) g_coop_split = 1;
@@ -669,6 +677,14 @@ int main(int argc, char *argv[]) {
     egl_wrap_init(g_window);
     egl_wrap_set_msaa(video.msaa > 0);
     opensles_init();
+    if (det_active()) {
+        /* Both runs start from the same save snapshot */
+        android_app_set_data_path(det_prepare_saves());
+        if (g_coop_host) {
+            printf("[Determinism] Co-op is disabled during the determinism test\n");
+            g_coop_host = 0;
+        }
+    }
     android_ndk_init(g_win_w, g_win_h);
     
     /* Load libminigore2.so */
@@ -697,6 +713,8 @@ int main(int argc, char *argv[]) {
     elf_init(&mod);
     
     java_stubs_install(&mod);
+    det_install(&mod);
+    det_set_screen(g_win_w, g_win_h);
     ai_hooks_install(&mod);
     gun_hooks_install(&mod, &g_guns);
     ui_nav_install(&mod);
@@ -752,10 +770,11 @@ int main(int argc, char *argv[]) {
                         android_app_push_cmd(APP_CMD_WINDOW_RESIZED);
                     } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                         watchdog_set_focused(1);
-                        android_app_push_cmd(APP_CMD_GAINED_FOCUS);
+                        if (!det_active()) android_app_push_cmd(APP_CMD_GAINED_FOCUS);
                     } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
                         watchdog_set_focused(0);
-                        android_app_push_cmd(APP_CMD_LOST_FOCUS);
+                        /* the determinism test must not pause the game when unfocused */
+                        if (!det_active()) android_app_push_cmd(APP_CMD_LOST_FOCUS);
                     }
                     break;
                     
@@ -979,6 +998,7 @@ int main(int argc, char *argv[]) {
         SDL_Delay(10);
     }
     
+    det_finish();
     printf("[Host] Shutting down application...\n");
     android_app_push_cmd(APP_CMD_LOST_FOCUS);
     android_app_push_cmd(APP_CMD_PAUSE);

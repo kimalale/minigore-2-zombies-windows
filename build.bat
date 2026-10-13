@@ -26,6 +26,7 @@ gcc %CFLAGS% ^
     native_port\shims.c ^
     native_port\watchdog.c ^
     native_port\log.c ^
+    native_port\determinism.c ^
     native_port\java_stubs.c ^
     native_port\ai_core.c ^
     native_port\ai_hooks.c ^

@@ -1,6 +1,7 @@
 #include "shims.h"
 #include "watchdog.h"
 #include "log.h"
+#include "determinism.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -250,7 +251,19 @@ static void CDECL shim___stack_chk_fail(void) {
     ExitProcess(1);
 }
 
-static int CDECL shim_clock_gettime(int clock_id, struct timespec *ts) {
+/* Bionic x86: time_t and long are 32-bit, so struct timespec is 8 bytes */
+typedef struct {
+    int32_t tv_sec;
+    int32_t tv_nsec;
+} BionicTimespec;
+
+static int CDECL shim_clock_gettime(int clock_id, BionicTimespec *ts) {
+    if (det_active()) { /* determinism test: virtual clock */
+        uint64_t ns = det_now_ns();
+        ts->tv_sec = (int32_t)(ns / 1000000000ULL);
+        ts->tv_nsec = (int32_t)(ns % 1000000000ULL);
+        return 0;
+    }
     static LARGE_INTEGER freq;
     static int init = 0;
     if (!init) {
@@ -259,17 +272,29 @@ static int CDECL shim_clock_gettime(int clock_id, struct timespec *ts) {
     }
     LARGE_INTEGER count;
     QueryPerformanceCounter(&count);
-    ts->tv_sec = (time_t)(count.QuadPart / freq.QuadPart);
-    ts->tv_nsec = (long)(((count.QuadPart % freq.QuadPart) * 1000000000LL) / freq.QuadPart);
+    ts->tv_sec = (int32_t)(count.QuadPart / freq.QuadPart);
+    ts->tv_nsec = (int32_t)(((count.QuadPart % freq.QuadPart) * 1000000000LL) / freq.QuadPart);
     return 0;
 }
 
-static int CDECL shim_nanosleep(const struct timespec *req, struct timespec *rem) {
+static int CDECL shim_nanosleep(const BionicTimespec *req, BionicTimespec *rem) {
     if (req) {
+        if (det_active()) det_advance_ns((uint64_t)req->tv_sec * 1000000000ULL + (uint64_t)req->tv_nsec);
         DWORD ms = (DWORD)(req->tv_sec * 1000 + req->tv_nsec / 1000000);
         Sleep(ms > 0 ? ms : 1);
     }
     return 0;
+}
+
+static int32_t CDECL shim_time(int32_t *t) {
+    int32_t now = det_active() ? (int32_t)det_wall_time() : (int32_t)_time32(NULL);
+    if (t) *t = now;
+    return now;
+}
+
+static struct tm * CDECL shim_localtime(const int32_t *t) {
+    __time32_t v = t ? *t : 0;
+    return _localtime32(&v);
 }
 
 /* Pthread shims
@@ -593,6 +618,10 @@ static long CDECL shim_lrand48(void) {
     return (long)((unsigned long long)next >> 17);
 }
 
+const volatile long long *shims_rand48_state(void) {
+    return &g_rand48_state;
+}
+
 static void CDECL shim_srand48(long seed) {
     InterlockedExchange64(&g_rand48_state, (LONGLONG)((((unsigned long long)(uint32_t)seed) << 16) | 0x330EULL));
 }
@@ -778,10 +807,10 @@ static const host_symbol_t g_host_symbols[] = {
     { "syscall",             (uintptr_t)shim_syscall },
     
     /* Time */
-    { "time",                (uintptr_t)time },
+    { "time",                (uintptr_t)shim_time },
     { "clock",               (uintptr_t)clock },
     { "clock_gettime",       (uintptr_t)shim_clock_gettime },
-    { "localtime",           (uintptr_t)localtime },
+    { "localtime",           (uintptr_t)shim_localtime },
     { "strftime",            (uintptr_t)strftime },
     { "mktime",              (uintptr_t)mktime },
     { "nanosleep",           (uintptr_t)shim_nanosleep },

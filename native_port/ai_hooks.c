@@ -1,6 +1,7 @@
 #include "ai_hooks.h"
 #include "ai_core.h"
 #include "coop.h"
+#include "determinism.h"
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -71,7 +72,7 @@ void ai_follow_entry(uint8_t *zombie, uint8_t *chased) {
 
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
-    double t = (double)now.QuadPart / (double)g_qpc_freq.QuadPart;
+    double t = det_active() ? det_sim_seconds() : (double)now.QuadPart / (double)g_qpc_freq.QuadPart;
 
     /* Classify by Behavior class */
     AiRole role = AI_ROLE_MELEE;
