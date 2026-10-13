@@ -34,8 +34,20 @@ Instead of rewriting or recreating the game in Unity or another engine, this pro
 
 ## Controls
 
-| Action | Keyboard | Mouse | Gamepad |
+| Action | Keyboard | Mouse | Xbox / XInput Controller |
 | :--- | :--- | :--- | :--- |
+| **Move** | `W` `A` `S` `D` | — | Left Stick / D-Pad |
+| **Aim & Shoot** | Arrow Keys / `I` `J` `K` `L` | Hold Left Button (aims at cursor) | Right Stick |
+| **Shoot ahead** | — | — | Right Trigger (fires the way you're moving; hold Left Trigger to strafe) |
+| **Menu Cursor** | — | Move | Left Stick / D-Pad moves an on-screen cursor |
+| **Menu Select / Tap** | — | Left Click (Right Click on in-game HUD) | A |
+| **Action / Confirm** | `Space` / `Enter` | — | A (in a level) |
+| **Back / Pause** | `Escape` | — | B / Start / View |
+| **Fullscreen** | `F11` / `Alt+Enter` | — | — |
+
+Controllers rumble on shots (scaled by the weapon), when you take a hit, and when you die. Sticks use a radial deadzone, so small tilts give fine movement without snapping to the axes.
+
+--- | :--- | :--- | :--- |
 | **Move** | `W` `A` `S` `D` | — | Left Analog Stick |
 | **Aim & Shoot** | Arrow Keys / `I` `J` `K` `L` | Hold Left Button (aims at cursor) | Right Analog Stick |
 | **Menu Selection** | — | Left Click (Right Click on in-game HUD) | A Button / D-Pad |

@@ -48,6 +48,36 @@ static float g_mouse_aim_dx = 1.0f;
 static float g_mouse_aim_dy = 0.0f;
 static GunConfig g_guns;
 
+/* Xbox / XInput controller */
+#define PAD_DEADZONE        0.22f   /* radial, as a share of full deflection */
+#define PAD_TRIGGER_FIRE    0.35f   /* right trigger fires along the last aim */
+#define PAD_CURSOR_SPEED    1.1f    /* window heights per second at full tilt */
+#define PAD_CURSOR_TIMEOUT  6000    /* ms of inactivity before the cursor hides */
+static float g_pad_cursor_x = -1.0f, g_pad_cursor_y = -1.0f;
+static Uint32 g_pad_cursor_active_at = 0;
+static bool g_pad_touching = false;     /* A held on the menu cursor */
+static float g_pad_aim_dx = 0.0f, g_pad_aim_dy = -1.0f; /* last aim, for trigger fire */
+
+/* Radial deadzone with rescaling, so small tilts move slowly and there is
+ * no square "snap" at the axes. Returns the magnitude (0 = inside deadzone). */
+static float pad_stick(SDL_GameControllerAxis ax_x, SDL_GameControllerAxis ax_y, float *ox, float *oy) {
+    *ox = *oy = 0.0f;
+    if (!g_gamepad) return 0.0f;
+    float x = SDL_GameControllerGetAxis(g_gamepad, ax_x) / 32767.0f;
+    float y = SDL_GameControllerGetAxis(g_gamepad, ax_y) / 32767.0f;
+    float m = sqrtf(x * x + y * y);
+    if (m < PAD_DEADZONE) return 0.0f;
+    float scaled = (m - PAD_DEADZONE) / (1.0f - PAD_DEADZONE);
+    if (scaled > 1.0f) scaled = 1.0f;
+    *ox = x / m * scaled;
+    *oy = y / m * scaled;
+    return scaled;
+}
+
+static float pad_trigger(SDL_GameControllerAxis axis) {
+    return g_gamepad ? SDL_GameControllerGetAxis(g_gamepad, axis) / 32767.0f : 0.0f;
+}
+
 /* Video settings (overridable from the command line) */
 typedef struct {
     int width;
@@ -193,6 +223,30 @@ static void update_touch_events(void) {
     }
 }
 
+static void touch_press(float x, float y) {
+    g_mouse_active = true;
+    g_mouse_x = x;
+    g_mouse_y = y;
+    if (g_wasd_active) {
+        android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_DOWN | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
+                                      2, g_wasd_x, g_wasd_y, g_mouse_x, g_mouse_y);
+    } else {
+        android_app_push_motion_event(AMOTION_EVENT_ACTION_DOWN, 1, g_mouse_x, g_mouse_y, 0.0f, 0.0f);
+    }
+}
+
+static void touch_release(float x, float y) {
+    g_mouse_active = false;
+    g_mouse_x = x;
+    g_mouse_y = y;
+    if (g_wasd_active) {
+        android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_UP | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
+                                      2, g_wasd_x, g_wasd_y, g_mouse_x, g_mouse_y);
+    } else {
+        android_app_push_motion_event(AMOTION_EVENT_ACTION_UP, 1, g_mouse_x, g_mouse_y, 0.0f, 0.0f);
+    }
+}
+
 static void update_wasd_stick(void) {
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
     float dx = 0.0f;
@@ -203,14 +257,17 @@ static void update_wasd_stick(void) {
     if (keys[SDL_SCANCODE_A]) dx -= 1.0f;
     if (keys[SDL_SCANCODE_D]) dx += 1.0f;
     
-    /* Also check gamepad left stick */
-    if (g_gamepad) {
-        Sint16 ax = SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_LEFTX);
-        Sint16 ay = SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_LEFTY);
-        if (abs(ax) > 8000 || abs(ay) > 8000) {
-            dx = (float)ax / 32767.0f;
-            dy = (float)ay / 32767.0f;
+    /* Gamepad left stick / D-pad move the player (in menus they drive the cursor) */
+    if (g_gamepad && gun_in_level()) {
+        float x, y;
+        if (pad_stick(SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, &x, &y) > 0.0f) {
+            dx = x;
+            dy = y;
         }
+        if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP)) dy -= 1.0f;
+        if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) dy += 1.0f;
+        if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) dx -= 1.0f;
+        if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) dx += 1.0f;
     }
     
     float len = sqrtf(dx * dx + dy * dy);
@@ -269,13 +326,27 @@ static void update_aim_stick(void) {
     if (keys[SDL_SCANCODE_LEFT]  || keys[SDL_SCANCODE_J]) dx -= 1.0f;
     if (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_L]) dx += 1.0f;
     
-    /* Also check gamepad right stick */
-    if (g_gamepad) {
-        Sint16 ax = SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_RIGHTX);
-        Sint16 ay = SDL_GameControllerGetAxis(g_gamepad, SDL_CONTROLLER_AXIS_RIGHTY);
-        if (abs(ax) > 8000 || abs(ay) > 8000) {
-            dx = (float)ax / 32767.0f;
-            dy = (float)ay / 32767.0f;
+    /* Gamepad: right stick aims and fires; right trigger fires along the
+     * last aim direction (or the way you're moving) without the stick */
+    if (g_gamepad && gun_in_level()) {
+        float x, y;
+        if (pad_stick(SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY, &x, &y) > 0.0f) {
+            float l = sqrtf(x * x + y * y);
+            g_pad_aim_dx = x / l;
+            g_pad_aim_dy = y / l;
+            dx = g_pad_aim_dx; /* full deflection: direction is what matters */
+            dy = g_pad_aim_dy;
+        } else if (pad_trigger(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > PAD_TRIGGER_FIRE) {
+            float mx, my;
+            /* Fire the way you're running, unless LT is held to strafe */
+            if (pad_stick(SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, &mx, &my) > 0.3f &&
+                pad_trigger(SDL_CONTROLLER_AXIS_TRIGGERLEFT) < PAD_TRIGGER_FIRE) {
+                float l = sqrtf(mx * mx + my * my);
+                g_pad_aim_dx = mx / l;
+                g_pad_aim_dy = my / l;
+            }
+            dx = g_pad_aim_dx;
+            dy = g_pad_aim_dy;
         }
     }
     
@@ -577,17 +648,7 @@ int main(int argc, char *argv[]) {
                     }
                     /* Left button in menus, right button anywhere: touch the screen */
                     if ((ev.button.button == SDL_BUTTON_LEFT || ev.button.button == SDL_BUTTON_RIGHT) && !g_mouse_active) {
-                        g_mouse_active = true;
-                        g_mouse_x = (float)ev.button.x;
-                        g_mouse_y = (float)ev.button.y;
-                        
-                        if (g_wasd_active) {
-                            android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_DOWN | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                                          2, g_wasd_x, g_wasd_y, g_mouse_x, g_mouse_y);
-                        } else {
-                            android_app_push_motion_event(AMOTION_EVENT_ACTION_DOWN, 1,
-                                                          g_mouse_x, g_mouse_y, 0.0f, 0.0f);
-                        }
+                        touch_press((float)ev.button.x, (float)ev.button.y);
                     }
                     break;
                     
@@ -597,23 +658,14 @@ int main(int argc, char *argv[]) {
                         update_aim_stick();
                         break;
                     }
-                    if ((ev.button.button == SDL_BUTTON_LEFT || ev.button.button == SDL_BUTTON_RIGHT) && g_mouse_active) {
-                        g_mouse_active = false;
-                        g_mouse_x = (float)ev.button.x;
-                        g_mouse_y = (float)ev.button.y;
-                        
-                        if (g_wasd_active) {
-                            android_app_push_motion_event(AMOTION_EVENT_ACTION_POINTER_UP | (1 << AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT),
-                                                          2, g_wasd_x, g_wasd_y, g_mouse_x, g_mouse_y);
-                        } else {
-                            android_app_push_motion_event(AMOTION_EVENT_ACTION_UP, 1,
-                                                          g_mouse_x, g_mouse_y, 0.0f, 0.0f);
-                        }
+                    if ((ev.button.button == SDL_BUTTON_LEFT || ev.button.button == SDL_BUTTON_RIGHT) &&
+                        g_mouse_active && !g_pad_touching) {
+                        touch_release((float)ev.button.x, (float)ev.button.y);
                     }
                     break;
                     
                 case SDL_MOUSEMOTION:
-                    if (g_mouse_active) {
+                    if (g_mouse_active && !g_pad_touching) {
                         g_mouse_x = (float)ev.motion.x;
                         g_mouse_y = (float)ev.motion.y;
                         update_touch_events();
@@ -682,17 +734,34 @@ int main(int argc, char *argv[]) {
                     break;
                     
                 case SDL_CONTROLLERAXISMOTION:
-                    update_wasd_stick();
-                    update_aim_stick();
-                    break;
+                    break; /* sticks are polled every loop */
                     
                 case SDL_CONTROLLERBUTTONDOWN:
                 case SDL_CONTROLLERBUTTONUP: {
-                    int action = (ev.type == SDL_CONTROLLERBUTTONDOWN) ? AKEY_EVENT_ACTION_DOWN : AKEY_EVENT_ACTION_UP;
-                    if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
-                        android_app_push_key_event(action, AKEYCODE_BUTTON_A);
-                    } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_B || ev.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
-                        android_app_push_key_event(action, AKEYCODE_BACK);
+                    bool down = (ev.type == SDL_CONTROLLERBUTTONDOWN);
+                    int action = down ? AKEY_EVENT_ACTION_DOWN : AKEY_EVENT_ACTION_UP;
+                    g_pad_cursor_active_at = SDL_GetTicks();
+                    switch (ev.cbutton.button) {
+                        case SDL_CONTROLLER_BUTTON_A:
+                            /* Menus: tap at the cursor. In a level: the game's A button. */
+                            if (down && !gun_in_level() && !g_mouse_active) {
+                                g_pad_touching = true;
+                                touch_press(g_pad_cursor_x, g_pad_cursor_y);
+                            } else if (!down && g_pad_touching) {
+                                g_pad_touching = false;
+                                touch_release(g_pad_cursor_x, g_pad_cursor_y);
+                            } else if (gun_in_level()) {
+                                android_app_push_key_event(action, AKEYCODE_BUTTON_A);
+                            }
+                            break;
+                        case SDL_CONTROLLER_BUTTON_B:
+                        case SDL_CONTROLLER_BUTTON_BACK:
+                        case SDL_CONTROLLER_BUTTON_START:
+                            /* Back in menus, pause in a level */
+                            android_app_push_key_event(action, AKEYCODE_BACK);
+                            break;
+                        default:
+                            break;
                     }
                     break;
                 }
@@ -705,6 +774,61 @@ int main(int argc, char *argv[]) {
         /* Keep the mouse-aim direction tracking the player as they move */
         if (g_mouse_aim_firing) {
             update_aim_stick();
+        }
+        
+        if (g_gamepad) {
+            bool in_level = gun_in_level();
+            /* Sticks and triggers are polled every loop so held input and the
+             * switch between menus and levels are handled */
+            update_wasd_stick();
+            update_aim_stick();
+            
+            /* Menu cursor: left stick or D-pad */
+            if (g_pad_cursor_x < 0.0f) {
+                g_pad_cursor_x = g_win_w * 0.5f;
+                g_pad_cursor_y = g_win_h * 0.5f;
+            }
+            if (!in_level) {
+                float x, y;
+                pad_stick(SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, &x, &y);
+                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP)) y -= 0.5f;
+                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) y += 0.5f;
+                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) x -= 0.5f;
+                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) x += 0.5f;
+                if (x != 0.0f || y != 0.0f) {
+                    /* squared response: fine control near centre, fast at full tilt */
+                    float step = PAD_CURSOR_SPEED * (float)g_win_h * 0.010f * 1.6f; /* loop ~10 ms */
+                    g_pad_cursor_x += x * fabsf(x) * step;
+                    g_pad_cursor_y += y * fabsf(y) * step;
+                    if (g_pad_cursor_x < 0) g_pad_cursor_x = 0;
+                    if (g_pad_cursor_y < 0) g_pad_cursor_y = 0;
+                    if (g_pad_cursor_x > g_win_w - 1) g_pad_cursor_x = (float)(g_win_w - 1);
+                    if (g_pad_cursor_y > g_win_h - 1) g_pad_cursor_y = (float)(g_win_h - 1);
+                    g_pad_cursor_active_at = SDL_GetTicks();
+                    if (g_pad_touching) { /* drag (sliders, scrolling) */
+                        g_mouse_x = g_pad_cursor_x;
+                        g_mouse_y = g_pad_cursor_y;
+                        update_touch_events();
+                    }
+                }
+            } else if (g_pad_touching) {
+                g_pad_touching = false; /* level started mid-tap */
+                touch_release(g_pad_cursor_x, g_pad_cursor_y);
+            }
+            bool show = !in_level && g_pad_cursor_active_at != 0 &&
+                        SDL_GetTicks() - g_pad_cursor_active_at < PAD_CURSOR_TIMEOUT;
+            egl_overlay_set_cursor(g_pad_cursor_x, g_pad_cursor_y, show, g_pad_touching);
+            
+            float lo, hi;
+            unsigned ms;
+            if (gun_take_rumble(&lo, &hi, &ms)) {
+                SDL_GameControllerRumble(g_gamepad, (Uint16)(lo * 65535.0f), (Uint16)(hi * 65535.0f), ms);
+            }
+        } else {
+            egl_overlay_set_cursor(0, 0, 0, 0);
+            float lo, hi;
+            unsigned ms;
+            gun_take_rumble(&lo, &hi, &ms); /* discard */
         }
         
         if (android_app_is_destroy_requested()) {

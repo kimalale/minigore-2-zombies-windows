@@ -167,8 +167,117 @@ EGLBoolean CDECL wrap_eglQuerySurface(EGLDisplay dpy, EGLSurface surface, EGLint
     return EGL_TRUE;
 }
 
+/* ------------------------------------------------------------- */
+/* Controller menu cursor overlay                                */
+/* ------------------------------------------------------------- */
+/* The game's menus are touch-only, so with a controller a cursor is moved
+ * with the left stick and A taps at it. It is drawn here, after the game
+ * has finished its frame, with every piece of GL state it touches saved
+ * and restored. */
+
+#ifndef GL_CURRENT_PROGRAM
+#define GL_CURRENT_PROGRAM 0x8B8D
+#endif
+#ifndef GL_ARRAY_BUFFER_BINDING
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+#define GL_ARRAY_BUFFER_BINDING 0x8894
+#define GL_ELEMENT_ARRAY_BUFFER_BINDING 0x8895
+#endif
+#ifndef GL_FRAMEBUFFER_BINDING
+#define GL_FRAMEBUFFER 0x8D40
+#define GL_FRAMEBUFFER_BINDING 0x8CA6
+#endif
+
+typedef void (APIENTRY *PFN_UseProgram)(GLuint);
+typedef void (APIENTRY *PFN_BindBuffer)(GLenum, GLuint);
+typedef void (APIENTRY *PFN_BindFramebuffer)(GLenum, GLuint);
+
+static volatile float g_cursor_x = 0.0f, g_cursor_y = 0.0f;
+static volatile int g_cursor_visible = 0;
+static volatile int g_cursor_pressed = 0;
+
+void egl_overlay_set_cursor(float x, float y, int visible, int pressed) {
+    g_cursor_x = x;
+    g_cursor_y = y;
+    g_cursor_pressed = pressed;
+    g_cursor_visible = visible;
+}
+
+static void draw_cursor_overlay(void) {
+    static PFN_UseProgram use_program;
+    static PFN_BindBuffer bind_buffer;
+    static PFN_BindFramebuffer bind_framebuffer;
+    if (!use_program) {
+        use_program = (PFN_UseProgram)SDL_GL_GetProcAddress("glUseProgram");
+        bind_buffer = (PFN_BindBuffer)SDL_GL_GetProcAddress("glBindBuffer");
+        bind_framebuffer = (PFN_BindFramebuffer)SDL_GL_GetProcAddress("glBindFramebuffer");
+        if (!use_program || !bind_buffer) return;
+    }
+
+    int w = 1280, h = 720;
+    SDL_GL_GetDrawableSize(g_egl_window, &w, &h);
+    float x = g_cursor_x, y = g_cursor_y;
+    float s = (float)h / 40.0f; /* cursor size scales with the window */
+
+    GLint program = 0, array_buffer = 0, element_buffer = 0, framebuffer = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_buffer);
+    if (bind_framebuffer) glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
+
+    use_program(0);
+    bind_buffer(GL_ARRAY_BUFFER, 0);
+    bind_buffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    if (bind_framebuffer) bind_framebuffer(GL_FRAMEBUFFER, 0);
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glViewport(0, 0, w, h);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, w, h, 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    /* Arrow: dark outline, then a white (or yellow while pressed) fill */
+    for (int pass = 0; pass < 2; pass++) {
+        float g = pass == 0 ? s * 0.18f : 0.0f;
+        if (pass == 0) glColor4f(0.0f, 0.0f, 0.0f, 0.85f);
+        else if (g_cursor_pressed) glColor4f(1.0f, 0.85f, 0.2f, 1.0f);
+        else glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(x - g * 0.7f, y - g * 1.6f);
+        glVertex2f(x - g * 0.7f, y + s * 1.4f + g * 1.4f);
+        glVertex2f(x + s * 1.0f + g * 1.6f, y + s * 1.0f + g * 0.7f);
+        glEnd();
+    }
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glPopClientAttrib();
+    glPopAttrib();
+    if (bind_framebuffer) bind_framebuffer(GL_FRAMEBUFFER, (GLuint)framebuffer);
+    bind_buffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)element_buffer);
+    bind_buffer(GL_ARRAY_BUFFER, (GLuint)array_buffer);
+    use_program((GLuint)program);
+}
+
 static int s_swap_count = 0;
 EGLBoolean CDECL wrap_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    if (g_egl_window && g_cursor_visible) {
+        draw_cursor_overlay();
+    }
     if (g_egl_window) {
         SDL_GL_SwapWindow(g_egl_window);
     }

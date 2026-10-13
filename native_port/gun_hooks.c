@@ -69,6 +69,8 @@ typedef unsigned (__attribute__((cdecl)) *QueryFn)(void *system, const float *po
 typedef void *(__attribute__((cdecl)) *GetGunFn)(const void *character, int index);
 typedef int   (__attribute__((cdecl)) *ScreenSizeFn)(void);
 typedef int   (__attribute__((cdecl)) *EntityIntFn)(void *entity);
+typedef void  (__attribute__((cdecl)) *StartShakeFn)(void *shaker);
+typedef int   (__attribute__((cdecl)) *DieFn)(void *self, const void *damage, float t);
 
 static GunConfig g_cfg;
 static uint8_t **g_env;         /* &m_env */
@@ -86,6 +88,14 @@ static QueryFn g_query;
 static GetGunFn g_get_gun;
 static ScreenSizeFn g_screen_w;
 static ScreenSizeFn g_screen_h;
+static StartShakeFn o_start_shake;
+static DieFn o_die;
+
+/* Pending rumble for the input thread: strongest request wins */
+static CRITICAL_SECTION g_rumble_lock;
+static volatile LONG g_rumble_ready = 0;
+static float g_rumble_low, g_rumble_high;
+static unsigned g_rumble_ms;
 
 static LARGE_INTEGER g_qpc_freq;
 static volatile LONG g_player_shooting = 0;
@@ -149,13 +159,58 @@ static int __attribute__((cdecl)) h_control_update(void *self, float dt, void *c
     return o_control_update(self, dt, character);
 }
 
-int gun_player_screen_pos(float *x, float *y) {
-    if (!g_cfg.mouse_aim || !o_control_update) return 0;
+int gun_in_level(void) {
     LONG tick = g_controls_tick;
-    if (tick == 0 || (LONG)GetTickCount() - tick > 150) return 0; /* menus / paused */
+    return o_control_update && tick != 0 && (LONG)GetTickCount() - tick <= 150; /* not menus / paused */
+}
+
+int gun_player_screen_pos(float *x, float *y) {
+    if (!g_cfg.mouse_aim || !gun_in_level()) return 0;
     *x = g_player_sx;
     *y = g_player_sy;
     return 1;
+}
+
+/* ---------------------------------------------------------------- */
+/* Controller rumble                                                */
+/* ---------------------------------------------------------------- */
+
+static void request_rumble(float low, float high, unsigned ms) {
+    if (!g_rumble_ready) return;
+    EnterCriticalSection(&g_rumble_lock);
+    if (low + high > g_rumble_low + g_rumble_high) {
+        g_rumble_low = low;
+        g_rumble_high = high;
+        g_rumble_ms = ms;
+    }
+    LeaveCriticalSection(&g_rumble_lock);
+}
+
+int gun_take_rumble(float *low, float *high, unsigned *ms) {
+    int have = 0;
+    if (!g_rumble_ready) return 0;
+    EnterCriticalSection(&g_rumble_lock);
+    if (g_rumble_ms) {
+        *low = g_rumble_low;
+        *high = g_rumble_high;
+        *ms = g_rumble_ms;
+        g_rumble_low = g_rumble_high = 0.0f;
+        g_rumble_ms = 0;
+        have = 1;
+    }
+    LeaveCriticalSection(&g_rumble_lock);
+    return have;
+}
+
+/* Screen shakes accompany taking damage, explosions and level-ups */
+static void __attribute__((cdecl)) h_start_shake(void *shaker) {
+    request_rumble(0.55f, 0.35f, 220);
+    o_start_shake(shaker);
+}
+
+static int __attribute__((cdecl)) h_die(void *self, const void *damage, float t) {
+    if (self == (void *)player_character()) request_rumble(1.0f, 0.8f, 600);
+    return o_die(self, damage, t);
 }
 
 /* ---------------------------------------------------------------- */
@@ -180,9 +235,16 @@ static int __attribute__((cdecl)) h_fire_shot(void *self, float dt, unsigned ind
     int fired = o_fire_shot(self, dt, index) & 0xff;
     if (is_player) InterlockedExchange(&g_player_shooting, 0);
 
-    if (is_player && fired && g_cfg.kick > 0.0f) {
-        g_kick += shot_strength((const uint8_t *)self) * g_cfg.kick;
-        if (g_kick > 10.0f * g_cfg.kick) g_kick = 10.0f * g_cfg.kick;
+    if (is_player && fired) {
+        float strength = shot_strength((const uint8_t *)self);
+        if (g_cfg.kick > 0.0f) {
+            g_kick += strength * g_cfg.kick;
+            if (g_kick > 10.0f * g_cfg.kick) g_kick = 10.0f * g_cfg.kick;
+        }
+        /* machine gun ~1 -> light buzz, shotgun ~7 -> solid thump */
+        float r = strength / 8.0f;
+        if (r > 0.8f) r = 0.8f;
+        request_rumble(r * 0.6f, 0.15f + r * 0.5f, strength > 3.0f ? 90 : 45);
     }
     return fired;
 }
@@ -331,6 +393,8 @@ static int __attribute__((cdecl)) h_auto_aim(const float *pos, float *out_x, flo
 void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg) {
     g_cfg = *cfg;
     QueryPerformanceFrequency(&g_qpc_freq);
+    InitializeCriticalSection(&g_rumble_lock);
+    InterlockedExchange(&g_rumble_ready, 1);
     g_env = (uint8_t **)elf_sym(mod, "m_env");
     if (!g_env) {
         printf("[Guns] m_env not found; gun changes disabled\n");
@@ -358,6 +422,9 @@ void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg) {
         o_apply_damage3 = (ApplyProjectileDamageFn)hook_got(mod, "_Z21applyProjectileDamagefRKN2xt7Vector3IfEES3_jPKjjy", (void *)h_apply_damage3);
         o_apply_damage2 = (ApplyProjectileDamageFn)hook_got(mod, "_Z21applyProjectileDamagefRKN2xt7Vector2IfEES3_jPKjjy", (void *)h_apply_damage2);
     }
+    o_start_shake = (StartShakeFn)hook_got(mod, "_ZN12CameraShaker10startShakeEv", (void *)h_start_shake);
+    o_die = (DieFn)hook_got(mod, "_ZN15PlayerCharacter3dieERK6Damagef", (void *)h_die);
+
     if (cfg->smart_autoaim && g_query) {
         o_auto_aim = (AutoAimFn)hook_got(mod, "_ZN16CharacterControl7autoAimERKN2xt7Vector2IfEEPfS5_b", (void *)h_auto_aim);
     }

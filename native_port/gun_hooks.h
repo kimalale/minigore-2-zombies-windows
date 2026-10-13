@@ -25,6 +25,13 @@ void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg);
  * window pixels, so mouse aim can point the aim stick at the cursor. */
 int gun_player_screen_pos(float *x, float *y);
 
+/* 1 while a level is being played (independent of mouse aim). */
+int gun_in_level(void);
+
+/* Controller rumble requested by the game thread (shots, hits, death).
+ * Returns 1 and the strongest pending request, clearing it. */
+int gun_take_rumble(float *low, float *high, unsigned *ms);
+
 #ifdef __cplusplus
 }
 #endif
