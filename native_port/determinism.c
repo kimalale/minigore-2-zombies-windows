@@ -154,6 +154,13 @@ void det_advance_ns(uint64_t ns) {
     if (!g_game_thread || GetCurrentThreadId() == g_game_thread) g_sleep_ns += ns;
 }
 
+/* The game loop (GameLoopStaticFPS) polls clock_gettime until a frame
+ * step has elapsed, without sleeping. Each pass that drew nothing moves
+ * the virtual clock a fixed 1 ms, or the loop would wait forever. */
+void det_idle(void) {
+    if (g_mode != DET_OFF) det_advance_ns(1000000ULL);
+}
+
 double det_sim_seconds(void) {
     return (double)det_now_ns() / 1e9;
 }

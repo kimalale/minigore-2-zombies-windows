@@ -469,6 +469,7 @@ int CDECL wrap_ALooper_pollAll(int timeoutMillis, int *outFd, int *outEvents, vo
         LeaveCriticalSection(&g_queue_cs);
         
         if (timeoutMillis == 0) {
+            det_idle(); /* determinism test: let virtual time pass */
             return -3; /* ALOOPER_POLL_TIMEOUT */
         }
         
