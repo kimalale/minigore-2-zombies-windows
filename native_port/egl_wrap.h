@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-void egl_wrap_init(SDL_Window *window, SDL_GLContext gl_ctx);
+void egl_wrap_init(SDL_Window *window);
+void egl_wrap_shutdown(void);
 
 #ifdef __cplusplus
 }

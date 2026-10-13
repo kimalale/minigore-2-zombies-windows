@@ -221,39 +221,94 @@ static int CDECL shim_nanosleep(const struct timespec *req, struct timespec *rem
 }
 
 /* Pthread shims */
-#define MUTEX_POOL_SIZE 256
-static CRITICAL_SECTION g_mutex_pool[MUTEX_POOL_SIZE];
-static volatile LONG g_mutex_pool_inited = 0;
+#define MUTEX_MAP_CAP 4096
 
-static inline CRITICAL_SECTION *get_pool_cs(void *mutex) {
-    if (!g_mutex_pool_inited) {
-        for (int i = 0; i < MUTEX_POOL_SIZE; i++) {
-            InitializeCriticalSection(&g_mutex_pool[i]);
-        }
-        g_mutex_pool_inited = 1;
+typedef struct {
+    void *key;
+    CRITICAL_SECTION cs;
+} MutexEntry;
+
+static MutexEntry g_mutex_map[MUTEX_MAP_CAP];
+static CRITICAL_SECTION g_map_lock;
+static volatile LONG g_map_inited = 0;
+
+static void init_mutex_map(void) {
+    if (InterlockedCompareExchange(&g_map_inited, 1, 0) == 0) {
+        InitializeCriticalSection(&g_map_lock);
+        memset(g_mutex_map, 0, sizeof(g_mutex_map));
     }
-    uintptr_t u = (uintptr_t)mutex;
-    size_t idx = ((u >> 2) ^ (u >> 8)) & (MUTEX_POOL_SIZE - 1);
-    return &g_mutex_pool[idx];
+}
+
+static CRITICAL_SECTION *get_mutex_cs(void *mutex) {
+    if (!mutex || mutex == (void *)(uintptr_t)-1) return NULL;
+    if (!g_map_inited) init_mutex_map();
+    
+    uintptr_t h = (uintptr_t)mutex;
+    uint32_t idx = (uint32_t)((h * 2654435761u) >> 20) & (MUTEX_MAP_CAP - 1);
+    
+    EnterCriticalSection(&g_map_lock);
+    int first_tombstone = -1;
+    for (uint32_t i = 0; i < MUTEX_MAP_CAP; i++) {
+        uint32_t slot = (idx + i) & (MUTEX_MAP_CAP - 1);
+        if (g_mutex_map[slot].key == mutex) {
+            LeaveCriticalSection(&g_map_lock);
+            return &g_mutex_map[slot].cs;
+        }
+        if (g_mutex_map[slot].key == (void *)(uintptr_t)-1 && first_tombstone == -1) {
+            first_tombstone = slot;
+        }
+        if (g_mutex_map[slot].key == NULL) {
+            uint32_t use_slot = (first_tombstone != -1) ? (uint32_t)first_tombstone : slot;
+            g_mutex_map[use_slot].key = mutex;
+            InitializeCriticalSection(&g_mutex_map[use_slot].cs);
+            LeaveCriticalSection(&g_map_lock);
+            return &g_mutex_map[use_slot].cs;
+        }
+    }
+    if (first_tombstone != -1) {
+        g_mutex_map[first_tombstone].key = mutex;
+        InitializeCriticalSection(&g_mutex_map[first_tombstone].cs);
+        LeaveCriticalSection(&g_map_lock);
+        return &g_mutex_map[first_tombstone].cs;
+    }
+    LeaveCriticalSection(&g_map_lock);
+    return NULL;
 }
 
 static int CDECL shim_pthread_mutex_init(void *mutex, const void *attr) {
+    if (mutex) get_mutex_cs(mutex);
     return 0;
 }
 
 static int CDECL shim_pthread_mutex_destroy(void *mutex) {
+    if (!mutex || !g_map_inited) return 0;
+    EnterCriticalSection(&g_map_lock);
+    uintptr_t h = (uintptr_t)mutex;
+    uint32_t idx = (uint32_t)((h * 2654435761u) >> 20) & (MUTEX_MAP_CAP - 1);
+    for (uint32_t i = 0; i < MUTEX_MAP_CAP; i++) {
+        uint32_t slot = (idx + i) & (MUTEX_MAP_CAP - 1);
+        if (g_mutex_map[slot].key == mutex) {
+            DeleteCriticalSection(&g_mutex_map[slot].cs);
+            g_mutex_map[slot].key = (void *)(uintptr_t)-1;
+            break;
+        }
+        if (g_mutex_map[slot].key == NULL) break;
+    }
+    LeaveCriticalSection(&g_map_lock);
     return 0;
 }
 
 static int CDECL shim_pthread_mutex_lock(void *mutex) {
     if (!mutex) return 0;
-    EnterCriticalSection(get_pool_cs(mutex));
+    CRITICAL_SECTION *cs = get_mutex_cs(mutex);
+    if (cs) EnterCriticalSection(cs);
     return 0;
 }
 
 static int CDECL shim_pthread_mutex_unlock(void *mutex) {
     if (!mutex) return 0;
-    LeaveCriticalSection(get_pool_cs(mutex));
+    CRITICAL_SECTION *cs = get_mutex_cs(mutex);
+    if (cs) LeaveCriticalSection(cs);
     return 0;
 }
 
@@ -267,15 +322,65 @@ static int CDECL shim_pthread_cond_destroy(void *cv) {
 
 static int CDECL shim_pthread_cond_wait(void *cv, void *mutex) {
     if (mutex) {
-        LeaveCriticalSection(get_pool_cs(mutex));
-        Sleep(1);
-        EnterCriticalSection(get_pool_cs(mutex));
+        CRITICAL_SECTION *cs = get_mutex_cs(mutex);
+        if (cs) {
+            LeaveCriticalSection(cs);
+            Sleep(1);
+            EnterCriticalSection(cs);
+        }
     }
     return 0;
 }
 
 static int CDECL shim_pthread_cond_broadcast(void *cv) {
     return 0;
+}
+
+/* Thread tracking */
+#define MAX_THREADS 64
+typedef struct {
+    DWORD tid;
+    HANDLE handle;
+    int in_use;
+} ThreadInfo;
+
+static ThreadInfo g_threads[MAX_THREADS];
+static CRITICAL_SECTION g_thread_lock;
+static volatile LONG g_thread_lock_inited = 0;
+
+static void init_thread_lock(void) {
+    if (InterlockedCompareExchange(&g_thread_lock_inited, 1, 0) == 0) {
+        InitializeCriticalSection(&g_thread_lock);
+        memset(g_threads, 0, sizeof(g_threads));
+    }
+}
+
+static void register_thread(DWORD tid, HANDLE handle) {
+    init_thread_lock();
+    EnterCriticalSection(&g_thread_lock);
+    for (int i = 0; i < MAX_THREADS; i++) {
+        if (!g_threads[i].in_use) {
+            g_threads[i].tid = tid;
+            g_threads[i].handle = handle;
+            g_threads[i].in_use = 1;
+            break;
+        }
+    }
+    LeaveCriticalSection(&g_thread_lock);
+}
+
+static HANDLE get_thread_handle_by_tid(DWORD tid) {
+    init_thread_lock();
+    EnterCriticalSection(&g_thread_lock);
+    HANDLE h = NULL;
+    for (int i = 0; i < MAX_THREADS; i++) {
+        if (g_threads[i].in_use && g_threads[i].tid == tid) {
+            h = g_threads[i].handle;
+            break;
+        }
+    }
+    LeaveCriticalSection(&g_thread_lock);
+    return h;
 }
 
 typedef struct {
@@ -288,6 +393,18 @@ static DWORD WINAPI win32_thread_proc(LPVOID lpParam) {
     void *(*fn)(void *) = tb->start_routine;
     void *arg = tb->arg;
     free(tb);
+    
+    /* Commit thread stack upfront */
+    MEMORY_BASIC_INFORMATION mbi;
+    memset(&mbi, 0, sizeof(mbi));
+    char *p = (char *)&mbi;
+    if (VirtualQuery(p, &mbi, sizeof(mbi))) {
+        if (mbi.AllocationBase) {
+            SIZE_T size_to_commit = (SIZE_T)(p - (char *)mbi.AllocationBase);
+            VirtualAlloc(mbi.AllocationBase, size_to_commit, MEM_COMMIT, PAGE_READWRITE);
+        }
+    }
+    
     fn(arg);
     return 0;
 }
@@ -296,20 +413,41 @@ static int CDECL shim_pthread_create(HANDLE *thread, const void *attr, void *(*s
     ThreadBridge *tb = (ThreadBridge *)malloc(sizeof(ThreadBridge));
     tb->start_routine = start_routine;
     tb->arg = arg;
-    *thread = CreateThread(NULL, 0, win32_thread_proc, tb, 0, NULL);
-    return *thread ? 0 : -1;
+    DWORD tid = 0;
+    HANDLE h = CreateThread(NULL, 0, win32_thread_proc, tb, 0, &tid);
+    if (h) {
+        register_thread(tid, h);
+        *thread = h;
+        return 0;
+    }
+    return -1;
 }
 
 static int CDECL shim_pthread_join(HANDLE thread, void **retval) {
     if (thread) {
         WaitForSingleObject(thread, INFINITE);
         CloseHandle(thread);
+        init_thread_lock();
+        EnterCriticalSection(&g_thread_lock);
+        for (int i = 0; i < MAX_THREADS; i++) {
+            if (g_threads[i].in_use && g_threads[i].handle == thread) {
+                g_threads[i].in_use = 0;
+                break;
+            }
+        }
+        LeaveCriticalSection(&g_thread_lock);
     }
     return 0;
 }
 
 static HANDLE CDECL shim_pthread_self(void) {
-    return GetCurrentThread();
+    DWORD tid = GetCurrentThreadId();
+    HANDLE h = get_thread_handle_by_tid(tid);
+    if (!h) {
+        DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &h, 0, FALSE, DUPLICATE_SAME_ACCESS);
+        register_thread(tid, h);
+    }
+    return h;
 }
 
 static void CDECL shim_pthread_exit(void *retval) {
@@ -416,10 +554,8 @@ void shims_init(void) {
     bionic_sF_[1] = stdout;
     bionic_sF_[2] = stderr;
     
-    for (int i = 0; i < MUTEX_POOL_SIZE; i++) {
-        InitializeCriticalSection(&g_mutex_pool[i]);
-    }
-    g_mutex_pool_inited = 1;
+    init_mutex_map();
+    init_thread_lock();
 }
 
 /* Master symbol table mapping all symbols needed by libminigore2.so */

@@ -17,7 +17,6 @@
 typedef void (*android_main_fn)(struct android_app *state);
 
 static SDL_Window *g_window = NULL;
-static SDL_GLContext g_gl_ctx = NULL;
 static HANDLE g_game_thread = NULL;
 static bool g_running = true;
 static int g_win_w = 1280;
@@ -281,29 +280,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    g_gl_ctx = SDL_GL_CreateContext(g_window);
-    if (!g_gl_ctx) {
-        fprintf(stderr, "Failed to create OpenGL context: %s\n", SDL_GetError());
-        SDL_DestroyWindow(g_window);
-        SDL_Quit();
-        return 1;
-    }
-    
-    SDL_GL_SetSwapInterval(1); /* VSync */
-    
-    printf("[Host] OpenGL Context: %s\n", (const char *)glGetString(GL_VERSION));
-    printf("[Host] OpenGL Renderer: %s\n", (const char *)glGetString(GL_RENDERER));
-    fflush(stdout);
-    
     /* Initialize host wrapper subsystems */
     shims_init();
-    gl_wrap_init();
-    egl_wrap_init(g_window, g_gl_ctx);
+    egl_wrap_init(g_window);
     opensles_init();
     android_ndk_init(g_win_w, g_win_h);
-    
-    /* Release OpenGL context from main thread so game thread can bind it */
-    SDL_GL_MakeCurrent(g_window, NULL);
     
     /* Load libminigore2.so */
     elf_module_t mod;
@@ -510,9 +491,7 @@ int main(int argc, char *argv[]) {
     
     opensles_shutdown();
     
-    if (g_gl_ctx) {
-        SDL_GL_DeleteContext(g_gl_ctx);
-    }
+    egl_wrap_shutdown();
     if (g_gamepad) {
         SDL_GameControllerClose(g_gamepad);
         g_gamepad = NULL;

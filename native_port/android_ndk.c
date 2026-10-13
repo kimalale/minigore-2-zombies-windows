@@ -420,24 +420,16 @@ int CDECL wrap_ALooper_addFd(ALooper *looper, int fd, int ident, int events, voi
 }
 
 int CDECL wrap_ALooper_pollAll(int timeoutMillis, int *outFd, int *outEvents, void **outData) {
-    if (timeoutMillis != 0) {
-        printf("[NDK] ALooper_pollAll(timeout=%d)\n", timeoutMillis);
-        fflush(stdout);
-    }
     while (1) {
         EnterCriticalSection(&g_queue_cs);
         if (g_cmd_head != g_cmd_tail) {
             if (outData) *outData = &g_app.cmdPollSource;
             LeaveCriticalSection(&g_queue_cs);
-            printf("[NDK] ALooper_pollAll -> LOOPER_ID_MAIN (cmd ready)\n");
-            fflush(stdout);
             return LOOPER_ID_MAIN;
         }
         if (g_event_head != g_event_tail) {
             if (outData) *outData = &g_app.inputPollSource;
             LeaveCriticalSection(&g_queue_cs);
-            printf("[NDK] ALooper_pollAll -> LOOPER_ID_INPUT\n");
-            fflush(stdout);
             return LOOPER_ID_INPUT;
         }
         LeaveCriticalSection(&g_queue_cs);
@@ -608,12 +600,32 @@ void CDECL wrap_android_app_post_exec_cmd(struct android_app *app, int8_t cmd) {
 }
 
 int CDECL wrap___android_log_print(int prio, const char *tag, const char *fmt, ...) {
+    static char s_last_msg[256] = {0};
+    static int s_repeat_count = 0;
+    
+    char msg[512];
     va_list args;
     va_start(args, fmt);
-    printf("[%s] ", tag ? tag : "LOG");
-    vprintf(fmt, args);
-    printf("\n");
+    vsnprintf(msg, sizeof(msg), fmt, args);
     va_end(args);
+    
+    if (strcmp(msg, s_last_msg) == 0) {
+        s_repeat_count++;
+        if (s_repeat_count == 10) {
+            printf("[%s] (previous message repeated 10 times, suppressing further duplicates...)\n", tag ? tag : "LOG");
+            fflush(stdout);
+        }
+        return 0;
+    }
+    
+    if (s_repeat_count >= 10) {
+        printf("[%s] (previous message repeated %d times)\n", tag ? tag : "LOG", s_repeat_count);
+    }
+    s_repeat_count = 0;
+    strncpy(s_last_msg, msg, sizeof(s_last_msg) - 1);
+    s_last_msg[sizeof(s_last_msg) - 1] = '\0';
+    
+    printf("[%s] %s\n", tag ? tag : "LOG", msg);
     fflush(stdout);
     return 0;
 }

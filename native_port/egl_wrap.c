@@ -1,5 +1,7 @@
 #include "egl_wrap.h"
+#include "gl_wrap.h"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,12 +34,19 @@ static EGLContext g_current_ctx = NULL;
 static EGLSurface g_current_draw = NULL;
 static EGLSurface g_current_read = NULL;
 
-void egl_wrap_init(SDL_Window *window, SDL_GLContext gl_ctx) {
+void egl_wrap_init(SDL_Window *window) {
     g_egl_window = window;
-    g_gl_context = gl_ctx;
+    g_gl_context = NULL;
     g_current_ctx = NULL;
     g_current_draw = NULL;
     g_current_read = NULL;
+}
+
+void egl_wrap_shutdown(void) {
+    if (g_gl_context) {
+        SDL_GL_DeleteContext(g_gl_context);
+        g_gl_context = NULL;
+    }
 }
 
 EGLDisplay CDECL wrap_eglGetDisplay(void *native_display) {
@@ -72,22 +81,49 @@ EGLSurface CDECL wrap_eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config, v
 }
 
 EGLContext CDECL wrap_eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_context, const EGLint *attrib_list) {
-    printf("[EGL] eglCreateContext\n");
+    printf("[EGL] eglCreateContext on game thread %lu\n", GetCurrentThreadId());
     fflush(stdout);
-    return (EGLContext)0x12345678;
+    
+    if (!g_gl_context && g_egl_window) {
+        /* Configure OpenGL 2.1 Compatibility Context on this thread */
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+        
+        g_gl_context = SDL_GL_CreateContext(g_egl_window);
+        if (g_gl_context) {
+            SDL_GL_MakeCurrent(g_egl_window, g_gl_context);
+            SDL_GL_SetSwapInterval(1); /* VSync */
+            gl_wrap_init();
+            printf("[EGL] Context created: %s\n", (const char *)glGetString(GL_VERSION));
+            printf("[EGL] Renderer: %s\n", (const char *)glGetString(GL_RENDERER));
+            fflush(stdout);
+        } else {
+            fprintf(stderr, "[EGL] Failed to create GL context: %s\n", SDL_GetError());
+            fflush(stderr);
+        }
+    }
+    return (EGLContext)g_gl_context;
 }
 
 EGLBoolean CDECL wrap_eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
-    printf("[EGL] eglMakeCurrent(ctx=%p)\n", ctx);
-    fflush(stdout);
     g_current_ctx = ctx;
     g_current_draw = draw;
     g_current_read = read;
     if (g_egl_window) {
-        if (ctx && g_gl_context) {
-            int ret = SDL_GL_MakeCurrent(g_egl_window, g_gl_context);
-            printf("[EGL] SDL_GL_MakeCurrent returned %d (%s)\n", ret, ret < 0 ? SDL_GetError() : "OK");
-            fflush(stdout);
+        if (ctx) {
+            if (!g_gl_context) {
+                wrap_eglCreateContext(dpy, NULL, NULL, NULL);
+            }
+            if (g_gl_context) {
+                int ret = SDL_GL_MakeCurrent(g_egl_window, g_gl_context);
+                if (ret < 0) {
+                    printf("[EGL] SDL_GL_MakeCurrent returned %d (%s)\n", ret, SDL_GetError());
+                    fflush(stdout);
+                }
+            }
         } else {
             SDL_GL_MakeCurrent(g_egl_window, NULL);
         }
@@ -126,7 +162,7 @@ EGLBoolean CDECL wrap_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         SDL_GL_SwapWindow(g_egl_window);
     }
     s_swap_count++;
-    if ((s_swap_count % 60) == 1) {
+    if ((s_swap_count % 300) == 1) {
         printf("[EGL] Frame %d swapped (60 FPS)\n", s_swap_count);
         fflush(stdout);
     }
@@ -160,5 +196,5 @@ EGLBoolean CDECL wrap_eglTerminate(EGLDisplay dpy) {
 
 void * CDECL wrap_eglGetProcAddress(const char *procname) {
     if (!procname) return NULL;
-    return SDL_GL_GetProcAddress(procname);
+    return (void *)SDL_GL_GetProcAddress(procname);
 }
