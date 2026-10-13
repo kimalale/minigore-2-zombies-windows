@@ -1,6 +1,7 @@
 #include "gun_hooks.h"
 #include "hook_util.h"
 #include "ai_core.h"
+#include "determinism.h"
 #include <windows.h>
 #include <math.h>
 #include <stdint.h>
@@ -208,13 +209,20 @@ static void __attribute__((cdecl)) h_update_controls(void *state, float dt) {
     o_update_controls(state, dt);
     uint8_t *e = env();
     if (!e) return;
+    if (det_replaying()) { /* determinism replay: the recorded sticks */
+        det_sticks((float *)(e + ENV_STICKS));
+        return;
+    }
     float s[4];
     EnterCriticalSection(&g_stick_lock);
     int fresh = g_sticks_tick != 0 && GetTickCount() - g_sticks_tick < 200;
     memcpy(s, g_sticks, sizeof(s));
     LeaveCriticalSection(&g_stick_lock);
-    if (!fresh) return;
     float *sticks = (float *)(e + ENV_STICKS);
+    if (!fresh) {
+        det_sticks(sticks);
+        return;
+    }
     if (s[0] != 0.0f || s[1] != 0.0f) {
         sticks[0] = s[0];
         sticks[1] = s[1];
@@ -223,6 +231,7 @@ static void __attribute__((cdecl)) h_update_controls(void *state, float dt) {
         sticks[2] = s[2];
         sticks[3] = s[3];
     }
+    det_sticks(sticks); /* recording: what the game will actually use */
 }
 
 int gun_in_level(void) {

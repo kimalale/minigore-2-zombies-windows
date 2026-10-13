@@ -173,6 +173,17 @@ At the defaults the stream needs roughly 8-12 Mbit/s of upload from the host; `-
 
 ---
 
+## Determinism Test
+
+A prerequisite for true multiplayer (each player running their own copy of the game, exchanging only inputs) is that the game produces exactly the same state from the same inputs. To check:
+
+1. `run.bat --record test.rec` - play a level normally for a minute or two (don't resize the window), then quit. Inputs and a fingerprint of the game state for every frame are saved, with a snapshot of your saves in `test.rec.saves`.
+2. `run.bat --replay test.rec` - the recording plays back with no input from you. When it finishes, `game_log.txt` reports either `RESULT: IN SYNC` or the first frame where the state differed and what differed (characters, other entities, random numbers).
+
+Both runs use a virtual clock (exactly 1/60 s per frame), a fixed date and a scratch copy of the save snapshot (`saves_determinism/`), so your real saves are never touched. Co-op is disabled while testing.
+
+---
+
 ## Troubleshooting Freezes and Crashes
 
 A watchdog thread monitors presented frames. If the game stops drawing while the window is focused (for 10 seconds during play, or 60 seconds while starting up, when the graphics driver may be compiling shaders), it writes `hang_report.txt` (also printed to the console) with:

@@ -2,6 +2,7 @@
 #include "gl_wrap.h"
 #include "watchdog.h"
 #include "net_host.h"
+#include "determinism.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <stdio.h>
@@ -276,6 +277,7 @@ static void draw_cursor_overlay(void) {
 
 static int s_swap_count = 0;
 EGLBoolean CDECL wrap_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    det_frame_end(); /* determinism test: fingerprint this frame's state */
     if (g_egl_window && net_host_guest_connected()) {
         /* Stream the finished frame (before the host's menu cursor) */
         int w, h;
