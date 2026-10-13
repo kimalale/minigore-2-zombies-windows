@@ -23,13 +23,62 @@
 #endif
 #define CDECL __attribute__((cdecl))
 
-/* Bionic ctype tables */
+/* Bionic ctype tables. In Bionic (from OpenBSD) the exported symbols are
+ * *pointers* to these tables:
+ *     extern const char *_ctype_;
+ *     extern const short *_tolower_tab_, *_toupper_tab_;
+ * and inlined isX()/toupper()/tolower() read e.g. _toupper_tab_[c + 1]
+ * through them. Exporting the arrays themselves made the game read the
+ * first table entries as a pointer (0x0000FFFF) and crash, e.g. in
+ * StateStore::addCharacterSelectButton when upper-casing a name. */
 static unsigned char bionic_ctype_[257];
 static short bionic_tolower_tab_[257];
 static short bionic_toupper_tab_[257];
+static const unsigned char *bionic_ctype_ptr = bionic_ctype_;
+static const short *bionic_tolower_tab_ptr = bionic_tolower_tab_;
+static const short *bionic_toupper_tab_ptr = bionic_toupper_tab_;
 
-/* Bionic __sF (stdin, stdout, stderr) */
-static FILE *bionic_sF_[3];
+/* Bionic __sF: `extern FILE __sF[3]` - three Bionic FILE structs (0x54
+ * bytes each), with stdout = &__sF[1] and stderr = &__sF[2] (= __sF +
+ * 0xa8). It used to be exported as an array of three msvcrt FILE*s, so a
+ * game write to stderr (PowerVR texture errors, the C++ terminate handler)
+ * handed msvcrt a pointer past the end of that array. Now __sF is sized
+ * like Bionic's and the stdio shims below translate pointers into it. */
+#define BIONIC_FILE_SIZE 0x54
+static uint8_t bionic_sF_[3 * BIONIC_FILE_SIZE] __attribute__((aligned(16)));
+
+static int is_std_stream(void *fp) {
+    uint8_t *p = (uint8_t *)fp;
+    return p >= bionic_sF_ && p < bionic_sF_ + sizeof(bionic_sF_);
+}
+
+static FILE *host_file(void *fp) {
+    if (is_std_stream(fp)) {
+        switch (((uint8_t *)fp - bionic_sF_) / BIONIC_FILE_SIZE) {
+            case 0: return stdin;
+            case 1: return stdout;
+            default: return stderr;
+        }
+    }
+    return (FILE *)fp; /* opened by the game through fopen / fdopen */
+}
+
+static int CDECL shim_fclose(void *fp) { return is_std_stream(fp) ? 0 : fclose(host_file(fp)); }
+static size_t CDECL shim_fread(void *b, size_t s, size_t n, void *fp) { return fread(b, s, n, host_file(fp)); }
+static size_t CDECL shim_fwrite(const void *b, size_t s, size_t n, void *fp) { return fwrite(b, s, n, host_file(fp)); }
+static int CDECL shim_fseek(void *fp, long off, int whence) { return fseek(host_file(fp), off, whence); }
+static long CDECL shim_ftell(void *fp) { return ftell(host_file(fp)); }
+static int CDECL shim_fputs(const char *str, void *fp) { return fputs(str, host_file(fp)); }
+static int CDECL shim_fputc(int c, void *fp) { return fputc(c, host_file(fp)); }
+static int CDECL shim_putc(int c, void *fp) { return putc(c, host_file(fp)); }
+static int CDECL shim_getc(void *fp) { return getc(host_file(fp)); }
+static int CDECL shim_ungetc(int c, void *fp) { return ungetc(c, host_file(fp)); }
+static char * CDECL shim_fgets(char *b, int n, void *fp) { return fgets(b, n, host_file(fp)); }
+static int CDECL shim_fflush(void *fp) { return fflush(fp ? host_file(fp) : NULL); }
+static int CDECL shim_setvbuf(void *fp, char *buf, int mode, size_t size) {
+    /* leave the host's stdio buffering (set up by log.c) alone */
+    return is_std_stream(fp) ? 0 : setvbuf(host_file(fp), buf, mode, size);
+}
 
 /* Forward declarations of GL wrappers */
 extern void CDECL wrap_glActiveTexture(unsigned int);
@@ -587,8 +636,8 @@ void shims_init(void) {
         if (isspace(i)) mask |= 0x08;
         if (ispunct(i)) mask |= 0x10;
         if (iscntrl(i)) mask |= 0x20;
-        if (isblank(i)) mask |= 0x40;
-        if (isxdigit(i)) mask |= 0x80;
+        if (isxdigit(i)) mask |= 0x40; /* _X */
+        if (isblank(i)) mask |= 0x80;  /* _B */
         bionic_ctype_[i + 1] = mask;
         bionic_tolower_tab_[i + 1] = (short)tolower(i);
         bionic_toupper_tab_[i + 1] = (short)toupper(i);
@@ -597,9 +646,6 @@ void shims_init(void) {
     bionic_tolower_tab_[0] = -1;
     bionic_toupper_tab_[0] = -1;
     
-    bionic_sF_[0] = stdin;
-    bionic_sF_[1] = stdout;
-    bionic_sF_[2] = stderr;
     
     init_thread_lock();
 }
@@ -615,9 +661,9 @@ static const host_symbol_t g_host_symbols[] = {
     { "__google_potentially_blocking_region_end",   (uintptr_t)shim_google_potentially_blocking_region_end },
     { "__sF",                (uintptr_t)bionic_sF_ },
     { "__stack_chk_fail",    (uintptr_t)shim___stack_chk_fail },
-    { "_ctype_",             (uintptr_t)bionic_ctype_ },
-    { "_tolower_tab_",       (uintptr_t)bionic_tolower_tab_ },
-    { "_toupper_tab_",       (uintptr_t)bionic_toupper_tab_ },
+    { "_ctype_",             (uintptr_t)&bionic_ctype_ptr },
+    { "_tolower_tab_",       (uintptr_t)&bionic_tolower_tab_ptr },
+    { "_toupper_tab_",       (uintptr_t)&bionic_toupper_tab_ptr },
     { "abort",               (uintptr_t)shim_abort },
     { "exit",                (uintptr_t)shim_exit },
     { "calloc",              (uintptr_t)calloc },
@@ -684,16 +730,16 @@ static const host_symbol_t g_host_symbols[] = {
     
     /* File IO */
     { "fopen",               (uintptr_t)fopen },
-    { "fclose",              (uintptr_t)fclose },
-    { "fread",               (uintptr_t)fread },
-    { "fwrite",              (uintptr_t)fwrite },
-    { "fseek",               (uintptr_t)fseek },
-    { "ftell",               (uintptr_t)ftell },
-    { "fputs",               (uintptr_t)fputs },
-    { "fputc",               (uintptr_t)fputc },
-    { "fgets",               (uintptr_t)fgets },
-    { "fflush",              (uintptr_t)fflush },
-    { "setvbuf",             (uintptr_t)setvbuf },
+    { "fclose",              (uintptr_t)shim_fclose },
+    { "fread",               (uintptr_t)shim_fread },
+    { "fwrite",              (uintptr_t)shim_fwrite },
+    { "fseek",               (uintptr_t)shim_fseek },
+    { "ftell",               (uintptr_t)shim_ftell },
+    { "fputs",               (uintptr_t)shim_fputs },
+    { "fputc",               (uintptr_t)shim_fputc },
+    { "fgets",               (uintptr_t)shim_fgets },
+    { "fflush",              (uintptr_t)shim_fflush },
+    { "setvbuf",             (uintptr_t)shim_setvbuf },
     { "remove",              (uintptr_t)remove },
     { "rename",              (uintptr_t)rename },
     { "open",                (uintptr_t)open },
@@ -703,9 +749,9 @@ static const host_symbol_t g_host_symbols[] = {
     { "lseek",               (uintptr_t)lseek },
     { "fstat",               (uintptr_t)fstat },
     { "fdopen",              (uintptr_t)fdopen },
-    { "getc",                (uintptr_t)getc },
-    { "putc",                (uintptr_t)putc },
-    { "ungetc",              (uintptr_t)ungetc },
+    { "getc",                (uintptr_t)shim_getc },
+    { "putc",                (uintptr_t)shim_putc },
+    { "ungetc",              (uintptr_t)shim_ungetc },
     { "ioctl",               (uintptr_t)shim_ioctl },
     { "pipe",                (uintptr_t)shim_pipe },
     { "poll",                (uintptr_t)shim_poll },
