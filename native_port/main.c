@@ -17,6 +17,9 @@
 #include "ai_core.h"
 #include "ai_hooks.h"
 #include "gun_hooks.h"
+#include "net_host.h"
+#include "coop.h"
+#include "guest.h"
 
 typedef void (*android_main_fn)(struct android_app *state);
 
@@ -47,6 +50,12 @@ static bool g_mouse_aim_firing = false;
 static float g_mouse_aim_dx = 1.0f;
 static float g_mouse_aim_dy = 0.0f;
 static GunConfig g_guns;
+
+/* Online co-op */
+static int g_coop_host = 0;
+static int g_coop_join = 0;
+static NetHostConfig g_host_cfg;
+static GuestConfig g_guest_cfg;
 
 /* Xbox / XInput controller */
 #define PAD_DEADZONE        0.22f   /* radial, as a share of full deflection */
@@ -105,6 +114,13 @@ static void print_usage(const char *exe) {
     printf("  --gun-damage <f>  Player gun damage multiplier, 0.5-3 (default 1.2)\n");
     printf("  --gun-ammo <f>    Ammo per pickup multiplier, 0.5-3 (default 1.3)\n");
     printf("  --no-smart-aim    Original aim assist (nearest enemy)\n");
+    printf("Online co-op (player 2 joins over the network):\n");
+    printf("  --host [port]     Host a game; a friend can join as player 2 (default port %d)\n", NET_DEFAULT_PORT);
+    printf("  --join <ip[:port]> Join a friend's game as player 2\n");
+    printf("  --code <text>     Join code both players must use (optional)\n");
+    printf("  --coop-width <px> Video width streamed to player 2 (default 960)\n");
+    printf("  --coop-fps <n>    Video frame rate streamed to player 2 (default 30)\n");
+    printf("  --coop-quality <n> JPEG quality 10-95 (default 60; lower for slow connections)\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
 }
 
@@ -112,6 +128,9 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     AiConfig ai;
     ai_config_default(&ai);
     gun_config_default(&g_guns);
+    net_host_config_default(&g_host_cfg);
+    memset(&g_guest_cfg, 0, sizeof(g_guest_cfg));
+    g_guest_cfg.port = NET_DEFAULT_PORT;
     cfg->width = 1280;
     cfg->height = 720;
     cfg->fullscreen = 0;
@@ -161,6 +180,27 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             g_guns.ammo = (float)atof(argv[++i]);
         } else if (strcmp(arg, "--no-smart-aim") == 0) {
             g_guns.smart_autoaim = 0;
+        } else if (strcmp(arg, "--host") == 0) {
+            g_coop_host = 1;
+            if (has_val && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9') g_host_cfg.port = atoi(argv[++i]);
+        } else if (strcmp(arg, "--join") == 0 && has_val) {
+            g_coop_join = 1;
+            const char *target = argv[++i];
+            const char *colon = strrchr(target, ':');
+            size_t n = colon ? (size_t)(colon - target) : strlen(target);
+            if (n >= sizeof(g_guest_cfg.host)) n = sizeof(g_guest_cfg.host) - 1;
+            memcpy(g_guest_cfg.host, target, n);
+            g_guest_cfg.host[n] = '\0';
+            if (colon) g_guest_cfg.port = atoi(colon + 1);
+        } else if (strcmp(arg, "--code") == 0 && has_val) {
+            strncpy(g_host_cfg.code, argv[i + 1], NET_CODE_LEN - 1);
+            strncpy(g_guest_cfg.code, argv[++i], NET_CODE_LEN - 1);
+        } else if (strcmp(arg, "--coop-width") == 0 && has_val) {
+            g_host_cfg.width = atoi(argv[++i]);
+        } else if (strcmp(arg, "--coop-fps") == 0 && has_val) {
+            g_host_cfg.fps = atoi(argv[++i]);
+        } else if (strcmp(arg, "--coop-quality") == 0 && has_val) {
+            g_host_cfg.quality = atoi(argv[++i]);
         } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -191,6 +231,19 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     if (g_guns.damage > 3.0f) g_guns.damage = 3.0f;
     if (g_guns.ammo < 0.5f) g_guns.ammo = 0.5f;
     if (g_guns.ammo > 3.0f) g_guns.ammo = 3.0f;
+    
+    if (g_coop_host && g_coop_join) {
+        fprintf(stderr, "Use either --host or --join, not both\n");
+        return 0;
+    }
+    if (g_host_cfg.port <= 0 || g_host_cfg.port > 65535) g_host_cfg.port = NET_DEFAULT_PORT;
+    if (g_guest_cfg.port <= 0 || g_guest_cfg.port > 65535) g_guest_cfg.port = NET_DEFAULT_PORT;
+    if (g_host_cfg.width < 320) g_host_cfg.width = 320;
+    if (g_host_cfg.width > 1920) g_host_cfg.width = 1920;
+    if (g_host_cfg.fps < 5) g_host_cfg.fps = 5;
+    if (g_host_cfg.fps > 60) g_host_cfg.fps = 60;
+    if (g_host_cfg.quality < 10) g_host_cfg.quality = 10;
+    if (g_host_cfg.quality > 95) g_host_cfg.quality = 95;
     return 1;
 }
 
@@ -485,6 +538,11 @@ int main(int argc, char *argv[]) {
      * bitmap-stretch the window on high-DPI displays. */
     SetProcessDPIAware();
     
+    /* Player 2 doesn't run the game: it shows the host's stream */
+    if (g_coop_join) {
+        return guest_main(&g_guest_cfg);
+    }
+    
     printf("====================================================\n");
     printf("  Minigore 2: Zombies - Native Windows Recompilation\n");
     printf("  Direct Android x86 ELF Loader under WOW64\n");
@@ -584,6 +642,9 @@ int main(int argc, char *argv[]) {
     
     ai_hooks_install(&mod);
     gun_hooks_install(&mod, &g_guns);
+    if (g_coop_host && net_host_start(&g_host_cfg) == 0) {
+        coop_install(&mod);
+    }
     watchdog_start(&mod);
     watchdog_register_thread(GetCurrentThread(), "main");
     

@@ -135,22 +135,42 @@ static uint8_t *player_character(void) {
 /* Mouse aim support                                                */
 /* ---------------------------------------------------------------- */
 
-static void publish_player_screen_pos(void) {
+int gun_project_ground(float x, float z, float *sx, float *sy) {
     uint8_t *e = env();
-    uint8_t *player = player_character();
-    if (!e || !player || !g_screen_w || !g_screen_h) return;
-
+    if (!e || !g_screen_w || !g_screen_h) return 0;
     const float *m = (const float *)(e + ENV_VIEWPROJ);
-    const float *p = (const float *)(player + ENTITY_POS);
-    /* Ground-plane position (x, 0, z) through projection * view */
-    float x = p[0], y = 0.0f, z = p[1];
+    /* Ground-plane position (x, 0, z) through projection * view, the same
+     * maths as the game's project() */
+    float y = 0.0f;
     float cx = m[0] * x + m[4] * y + m[8] * z + m[12];
     float cy = m[1] * x + m[5] * y + m[9] * z + m[13];
     float cw = m[3] * x + m[7] * y + m[11] * z + m[15];
-    if (cw <= 1e-6f) return;
+    if (cw <= 1e-6f) return 0;
     float w = (float)g_screen_w(), h = (float)g_screen_h();
-    g_player_sx = (cx / cw * 0.5f + 0.5f) * w;
-    g_player_sy = (1.0f - (cy / cw * 0.5f + 0.5f)) * h; /* window y grows down */
+    *sx = (cx / cw * 0.5f + 0.5f) * w;
+    *sy = (1.0f - (cy / cw * 0.5f + 0.5f)) * h; /* window y grows down */
+    return 1;
+}
+
+int gun_project_ground_normalized(float x, float z, float *nx, float *ny) {
+    float sx, sy;
+    if (!gun_project_ground(x, z, &sx, &sy)) return 0;
+    int w = g_screen_w(), h = g_screen_h();
+    if (w <= 0 || h <= 0) return 0;
+    *nx = sx / (float)w;
+    *ny = sy / (float)h;
+    return 1;
+}
+
+static void publish_player_screen_pos(void) {
+    uint8_t *player = player_character();
+    if (!player) return;
+    const float *p = (const float *)(player + ENTITY_POS);
+    float sx, sy;
+    if (gun_project_ground(p[0], p[1], &sx, &sy)) {
+        g_player_sx = sx;
+        g_player_sy = sy;
+    }
 }
 
 static int __attribute__((cdecl)) h_control_update(void *self, float dt, void *character) {
@@ -271,8 +291,18 @@ static void __attribute__((cdecl)) h_get_weapon_info(uint8_t *info, unsigned typ
     }
 }
 
-static void __attribute__((cdecl)) h_set_camera(const float *eye, const float *look, const float *up,
+static void (*g_camera_adjust)(float eye[3], float look[3]) = NULL;
+
+void gun_set_camera_adjust(void (*adjust)(float eye[3], float look[3])) {
+    g_camera_adjust = adjust;
+}
+
+static void __attribute__((cdecl)) h_set_camera(const float *eye_in, const float *look_in, const float *up,
                                                 float fov, float aspect, float znear, float zfar) {
+    float eye[3] = { eye_in[0], eye_in[1], eye_in[2] };
+    float look[3] = { look_in[0], look_in[1], look_in[2] };
+    if (g_camera_adjust) g_camera_adjust(eye, look);
+
     double t = now_seconds();
     double dt = t - g_kick_t;
     g_kick_t = t;
@@ -415,9 +445,8 @@ void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg) {
     o_control_update = (ControlUpdateFn)hook_vtable(mod, "_ZTV21CharacterControlHuman", 2, (void *)h_control_update);
     if (o_control_update) hook_got(mod, "_ZN21CharacterControlHuman6updateEfP9Character", (void *)h_control_update);
     o_fire_shot = (FireShotFn)hook_got(mod, "_ZN9Character8fireShotEfj", (void *)h_fire_shot);
-    if (cfg->kick > 0.0f) {
-        o_set_camera = (SetCameraFn)hook_got(mod, "_Z9setCameraRKN2xt7Vector3IfEES3_S3_ffff", (void *)h_set_camera);
-    }
+    /* Always hooked: recoil kick and co-op camera framing */
+    o_set_camera = (SetCameraFn)hook_got(mod, "_Z9setCameraRKN2xt7Vector3IfEES3_S3_ffff", (void *)h_set_camera);
     if (cfg->damage != 1.0f) {
         o_apply_damage3 = (ApplyProjectileDamageFn)hook_got(mod, "_Z21applyProjectileDamagefRKN2xt7Vector3IfEES3_jPKjjy", (void *)h_apply_damage3);
         o_apply_damage2 = (ApplyProjectileDamageFn)hook_got(mod, "_Z21applyProjectileDamagefRKN2xt7Vector2IfEES3_jPKjjy", (void *)h_apply_damage2);
@@ -430,7 +459,7 @@ void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg) {
     }
 
     printf("[Guns] mouse aim %s, recoil kick %.1f, damage x%.2f, ammo x%.2f, smart aim assist %s\n",
-           (cfg->mouse_aim && o_control_update) ? "on" : "off", o_set_camera ? cfg->kick : 0.0f,
+           (cfg->mouse_aim && o_control_update) ? "on" : "off", o_set_camera ? g_cfg.kick : 0.0f,
            o_apply_damage3 ? cfg->damage : 1.0f, o_get_weapon_info ? cfg->ammo : 1.0f,
            o_auto_aim ? "on" : "off");
     fflush(stdout);

@@ -1,6 +1,7 @@
 #include "egl_wrap.h"
 #include "gl_wrap.h"
 #include "watchdog.h"
+#include "net_host.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <stdio.h>
@@ -275,6 +276,12 @@ static void draw_cursor_overlay(void) {
 
 static int s_swap_count = 0;
 EGLBoolean CDECL wrap_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    if (g_egl_window && net_host_guest_connected()) {
+        /* Stream the finished frame (before the host's menu cursor) */
+        int w, h;
+        SDL_GL_GetDrawableSize(g_egl_window, &w, &h);
+        net_host_capture_frame(w, h);
+    }
     if (g_egl_window && g_cursor_visible) {
         draw_cursor_overlay();
     }
