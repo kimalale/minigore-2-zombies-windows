@@ -12,11 +12,12 @@
  * consumed), HASH (state fingerprint at the end of the frame), END. */
 
 #define DET_MAGIC        "MG2DET1"
-#define DET_VERSION      1
+#define DET_VERSION      2   /* 2: g_random pinned and fingerprinted */
 #define FRAME_NS_NUM     1000000000ULL      /* 1/60 s per frame, without drift */
 #define FRAME_NS_DEN     60ULL
 #define CLOCK_START_NS   (1000ULL * 1000000000ULL)
 #define FIXED_WALL_TIME  1767225600LL       /* 2026-01-01 00:00:00 UTC */
+#define FIXED_RANDOM_SEED 0x2545u           /* g_random, normally seeded from clock() */
 #define MAX_ENTITIES     2048
 #define MAX_REPORTS      10
 
@@ -66,6 +67,7 @@ static int g_reported_end = 0;
 static int32_t g_screen[2] = { 0, 0 };   /* window size the recording was made at */
 
 /* Game access for fingerprints */
+static uint32_t *g_random = NULL;   /* the game's own LCG (spawns, pickups, patrols) */
 #define ENV_CHARACTERS       0x1f4f1c
 #define ENV_CHARACTER_COUNT  0x1f4f9c
 #define ENV_ENTITY_SYSTEM    0x12784
@@ -191,6 +193,7 @@ static void fingerprint(Fingerprint *fp) {
     memset(fp, 0, sizeof(*fp));
     uint64_t seed = 0xcbf29ce484222325ULL;
     fp->rng = fnv(seed, (const void *)shims_rand48_state(), 8);
+    if (g_random) fp->rng = fnv(fp->rng, g_random, 4);
 
     uint8_t *e = g_env ? *g_env : NULL;
     if (!e) return;
@@ -326,6 +329,13 @@ void det_install(elf_module_t *mod) {
     g_base = (uintptr_t)mod->base;
     g_get_health = (IntGetterFn)elf_sym(mod, "_ZNK9Character9getHealthEv");
     g_query = (QueryFn)elf_sym(mod, "_ZN12EntitySystem19queryEntitiesAroundERKN2xt7Vector2IfEEfyjPNS_11QueryResultEj");
+
+    /* A static constructor seeds g_random from clock() (CPU time so far),
+     * different every launch; it decides zombie types, spawn spots, script
+     * patterns and pickups. Constructors have run by now: pin it. */
+    g_random = (uint32_t *)elf_sym(mod, "g_random");
+    if (g_random) *g_random = FIXED_RANDOM_SEED;
+    else printf("[Determinism] WARNING: g_random not found; spawns will differ\n");
 
     if (g_mode == DET_RECORD) {
         g_out = fopen(g_path, "wb");

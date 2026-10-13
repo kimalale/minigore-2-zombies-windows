@@ -125,7 +125,14 @@ void gun_config_default(GunConfig *cfg) {
     cfg->smart_autoaim = 1;
 }
 
+/* Game-thread clocks: the determinism test's virtual clock when active,
+ * so the camera kick replays exactly */
+static LONG tick_ms(void) {
+    return det_active() ? (LONG)(det_now_ns() / 1000000ULL) : (LONG)GetTickCount();
+}
+
 static double now_seconds(void) {
+    if (det_active()) return det_sim_seconds();
     LARGE_INTEGER t;
     QueryPerformanceCounter(&t);
     return (double)t.QuadPart / (double)g_qpc_freq.QuadPart;
@@ -184,7 +191,7 @@ static void publish_player_screen_pos(void) {
 
 static int __attribute__((cdecl)) h_control_update(void *self, float dt, void *character) {
     publish_player_screen_pos();
-    InterlockedExchange(&g_controls_tick, (LONG)GetTickCount());
+    InterlockedExchange(&g_controls_tick, tick_ms());
     return o_control_update(self, dt, character);
 }
 
@@ -236,7 +243,7 @@ static void __attribute__((cdecl)) h_update_controls(void *state, float dt) {
 
 int gun_in_level(void) {
     LONG tick = g_controls_tick;
-    return o_control_update && tick != 0 && (LONG)GetTickCount() - tick <= 150; /* not menus / paused */
+    return o_control_update && tick != 0 && tick_ms() - tick <= 150; /* not menus / paused */
 }
 
 int gun_player_screen_pos(float *x, float *y) {
@@ -366,7 +373,7 @@ static void __attribute__((cdecl)) h_set_camera(const float *eye_in, const float
 
     /* Only touch the player object while a level is running */
     LONG tick = g_controls_tick;
-    int in_level = tick != 0 && (LONG)GetTickCount() - tick < 150;
+    int in_level = tick != 0 && tick_ms() - tick < 150;
     uint8_t *player = in_level ? player_character() : NULL;
     if (g_kick < 0.01f || !player || no_kick) {
         o_set_camera(eye, look, up, fov, aspect, znear, zfar);
@@ -378,7 +385,7 @@ static void __attribute__((cdecl)) h_set_camera(const float *eye_in, const float
     float ax = aim[0], az = aim[1];
     float len = sqrtf(ax * ax + az * az);
     if (len > 1e-4f) { ax /= len; az /= len; } else { ax = 0.0f; az = 0.0f; }
-    float jitter = ((float)(GetTickCount() % 7) - 3.0f) / 3.0f * 0.25f * g_kick;
+    float jitter = ((float)((DWORD)tick_ms() % 7) - 3.0f) / 3.0f * 0.25f * g_kick;
     float ox = -ax * g_kick - az * jitter;
     float oz = -az * g_kick + ax * jitter;
 
