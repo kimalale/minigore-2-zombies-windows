@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #ifdef CDECL
 #undef CDECL
@@ -206,32 +207,37 @@ void egl_overlay_set_cursor(float x, float y, int visible, int pressed) {
     g_cursor_visible = visible;
 }
 
-static void draw_cursor_overlay(void) {
-    static PFN_UseProgram use_program;
-    static PFN_BindBuffer bind_buffer;
-    static PFN_BindFramebuffer bind_framebuffer;
-    if (!use_program) {
-        use_program = (PFN_UseProgram)SDL_GL_GetProcAddress("glUseProgram");
-        bind_buffer = (PFN_BindBuffer)SDL_GL_GetProcAddress("glBindBuffer");
-        bind_framebuffer = (PFN_BindFramebuffer)SDL_GL_GetProcAddress("glBindFramebuffer");
-        if (!use_program || !bind_buffer) return;
+typedef struct {
+    GLint program, array_buffer, element_buffer, framebuffer;
+} OverlayState;
+
+static PFN_UseProgram ov_use_program;
+static PFN_BindBuffer ov_bind_buffer;
+static PFN_BindFramebuffer ov_bind_framebuffer;
+
+/* Plain fixed-function drawing in window pixels, every piece of GL state
+ * it touches saved and restored */
+static int overlay_begin(OverlayState *st, int *w, int *h) {
+    if (!ov_use_program) {
+        ov_use_program = (PFN_UseProgram)SDL_GL_GetProcAddress("glUseProgram");
+        ov_bind_buffer = (PFN_BindBuffer)SDL_GL_GetProcAddress("glBindBuffer");
+        ov_bind_framebuffer = (PFN_BindFramebuffer)SDL_GL_GetProcAddress("glBindFramebuffer");
+        if (!ov_use_program || !ov_bind_buffer) return 0;
     }
+    *w = 1280;
+    *h = 720;
+    SDL_GL_GetDrawableSize(g_egl_window, w, h);
 
-    int w = 1280, h = 720;
-    SDL_GL_GetDrawableSize(g_egl_window, &w, &h);
-    float x = g_cursor_x, y = g_cursor_y;
-    float s = (float)h / 40.0f; /* cursor size scales with the window */
+    memset(st, 0, sizeof(*st));
+    glGetIntegerv(GL_CURRENT_PROGRAM, &st->program);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &st->array_buffer);
+    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &st->element_buffer);
+    if (ov_bind_framebuffer) glGetIntegerv(GL_FRAMEBUFFER_BINDING, &st->framebuffer);
 
-    GLint program = 0, array_buffer = 0, element_buffer = 0, framebuffer = 0;
-    glGetIntegerv(GL_CURRENT_PROGRAM, &program);
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
-    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_buffer);
-    if (bind_framebuffer) glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
-
-    use_program(0);
-    bind_buffer(GL_ARRAY_BUFFER, 0);
-    bind_buffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    if (bind_framebuffer) bind_framebuffer(GL_FRAMEBUFFER, 0);
+    ov_use_program(0);
+    ov_bind_buffer(GL_ARRAY_BUFFER, 0);
+    ov_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    if (ov_bind_framebuffer) ov_bind_framebuffer(GL_FRAMEBUFFER, 0);
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
     glDisable(GL_DEPTH_TEST);
@@ -242,14 +248,32 @@ static void draw_cursor_overlay(void) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glViewport(0, 0, w, h);
+    glViewport(0, 0, *w, *h);
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    glOrtho(0, w, h, 0, -1, 1);
+    glOrtho(0, *w, *h, 0, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
+    return 1;
+}
+
+static void overlay_end(const OverlayState *st) {
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glPopClientAttrib();
+    glPopAttrib();
+    if (ov_bind_framebuffer) ov_bind_framebuffer(GL_FRAMEBUFFER, (GLuint)st->framebuffer);
+    ov_bind_buffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)st->element_buffer);
+    ov_bind_buffer(GL_ARRAY_BUFFER, (GLuint)st->array_buffer);
+    ov_use_program((GLuint)st->program);
+}
+
+static void draw_cursor_overlay(int w, int h) {
+    float x = g_cursor_x, y = g_cursor_y;
+    float s = (float)h / 40.0f; /* cursor size scales with the window */
 
     /* Arrow: dark outline, then a white (or yellow while pressed) fill */
     for (int pass = 0; pass < 2; pass++) {
@@ -263,16 +287,134 @@ static void draw_cursor_overlay(void) {
         glVertex2f(x + s * 1.0f + g * 1.6f, y + s * 1.0f + g * 0.7f);
         glEnd();
     }
+}
 
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glPopClientAttrib();
-    glPopAttrib();
-    if (bind_framebuffer) bind_framebuffer(GL_FRAMEBUFFER, (GLuint)framebuffer);
-    bind_buffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)element_buffer);
-    bind_buffer(GL_ARRAY_BUFFER, (GLuint)array_buffer);
-    use_program((GLuint)program);
+/* ------------------------------------------------------------- */
+/* Own-world co-op overlay: both players' health, partner marker */
+/* ------------------------------------------------------------- */
+
+static EglCoopOverlay g_coop;  /* game thread only */
+static int g_coop_frames = 0;  /* shown while refreshed each frame (levels only) */
+
+void egl_overlay_set_coop(const EglCoopOverlay *info) {
+    if (info) g_coop = *info;
+    else g_coop.visible = 0;
+    g_coop_frames = g_coop.visible ? 2 : 0;
+}
+
+/* 3x5 pixel font, rows top to bottom, 3 bits each (left = 4) */
+static const struct { char c; unsigned char rows[5]; } k_glyphs[] = {
+    { '0', { 2, 5, 5, 5, 2 } }, { '1', { 2, 6, 2, 2, 7 } }, { '2', { 6, 1, 2, 4, 7 } },
+    { 'A', { 2, 5, 7, 5, 5 } }, { 'C', { 3, 4, 4, 4, 3 } }, { 'D', { 6, 5, 5, 5, 6 } },
+    { 'F', { 7, 4, 6, 4, 4 } }, { 'N', { 5, 7, 7, 5, 5 } }, { 'O', { 2, 5, 5, 5, 2 } },
+    { 'P', { 6, 5, 6, 4, 4 } }, { 'S', { 3, 4, 2, 1, 6 } }, { 'T', { 7, 2, 2, 2, 2 } },
+    { 'U', { 5, 5, 5, 5, 7 } }, { 'W', { 5, 5, 7, 7, 5 } }, { 'Y', { 5, 5, 2, 2, 2 } },
+};
+
+static void draw_rect(float x, float y, float w, float h) {
+    glBegin(GL_QUADS);
+    glVertex2f(x, y);
+    glVertex2f(x + w, y);
+    glVertex2f(x + w, y + h);
+    glVertex2f(x, y + h);
+    glEnd();
+}
+
+static float text_width(const char *t, float px) {
+    return (float)strlen(t) * 4.0f * px - px;
+}
+
+static void draw_text(float x, float y, float px, const char *t) {
+    for (; *t; t++, x += 4.0f * px) {
+        for (size_t g = 0; g < sizeof(k_glyphs) / sizeof(k_glyphs[0]); g++) {
+            if (k_glyphs[g].c != *t) continue;
+            for (int r = 0; r < 5; r++) {
+                for (int c = 0; c < 3; c++) {
+                    if (k_glyphs[g].rows[r] & (4 >> c)) draw_rect(x + c * px, y + r * px, px, px);
+                }
+            }
+        }
+    }
+}
+
+static void player_color(int i, float a) {
+    if (i == 0) glColor4f(0.35f, 0.65f, 1.0f, a);  /* player 1: blue */
+    else glColor4f(1.0f, 0.6f, 0.15f, a);          /* player 2: orange */
+}
+
+static void draw_coop_overlay(int w, int h) {
+    float u = (float)h / 720.0f;
+    float px = 3.0f * u;                      /* font pixel */
+    float bar_w = (float)w * 0.16f, bar_h = 12.0f * u, gap = 36.0f * u;
+    float top = 14.0f * u + 7.0f * px;
+
+    for (int i = 0; i < 2; i++) {
+        if (!g_coop.p[i].present) continue;
+        float x = i == 0 ? w * 0.5f - gap * 0.5f - bar_w : w * 0.5f + gap * 0.5f;
+        const char *name = i == 0 ? "P1" : "P2";
+        player_color(i, 1.0f);
+        draw_text(x, top - 7.0f * px, px, name);
+        if (i == g_coop.local) {
+            glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
+            draw_text(x + text_width(name, px) + 3.0f * px, top - 7.0f * px, px, "YOU");
+        }
+        glColor4f(0.0f, 0.0f, 0.0f, 0.6f);
+        draw_rect(x - 2.0f * u, top - 2.0f * u, bar_w + 4.0f * u, bar_h + 4.0f * u);
+        float f = g_coop.p[i].alive ? g_coop.p[i].health : 0.0f;
+        if (f > 0.0f) {
+            if (f < 0.3f) glColor4f(0.95f, 0.2f, 0.15f, 1.0f);
+            else player_color(i, 1.0f);
+            draw_rect(x, top, bar_w * f, bar_h);
+        }
+        if (!g_coop.p[i].alive) {
+            glColor4f(1.0f, 1.0f, 1.0f, 0.9f);
+            draw_text(x + (bar_w - text_width("DOWN", px)) * 0.5f, top + (bar_h - 5.0f * px) * 0.5f, px, "DOWN");
+        }
+    }
+
+    /* Where the partner is: a marker over them, or an arrow at the edge */
+    int o = 1 - g_coop.local;
+    if (g_coop.p[o].present && g_coop.p[o].alive && g_coop.p[o].on_screen_valid) {
+        float tx = g_coop.p[o].sx, ty = g_coop.p[o].sy - 75.0f * u;
+        float m = 28.0f * u, r = 11.0f * u;
+        int inside = tx > m && tx < w - m && ty > m && ty < h - m;
+        float dx = 0.0f, dy = 1.0f; /* pointing down at them */
+        if (!inside) {
+            float cx = w * 0.5f, cy = h * 0.5f;
+            dx = tx - cx;
+            dy = ty - cy;
+            float l = sqrtf(dx * dx + dy * dy);
+            if (l < 1e-3f) l = 1.0f;
+            dx /= l;
+            dy /= l;
+            float sx = dx != 0.0f ? ((dx > 0 ? w - m : m) - cx) / dx : 1e9f;
+            float sy = dy != 0.0f ? ((dy > 0 ? h - m : m) - cy) / dy : 1e9f;
+            float t = sx < sy ? sx : sy;
+            tx = cx + dx * t;
+            ty = cy + dy * t;
+        }
+        float nx = -dy, ny = dx;
+        for (int pass = 0; pass < 2; pass++) {
+            float g = pass == 0 ? 3.0f * u : 0.0f;
+            if (pass == 0) glColor4f(0.0f, 0.0f, 0.0f, 0.7f);
+            else player_color(o, 1.0f);
+            glBegin(GL_TRIANGLES);
+            glVertex2f(tx + dx * (r + g), ty + dy * (r + g));
+            glVertex2f(tx - dx * r + nx * (r + g), ty - dy * r + ny * (r + g));
+            glVertex2f(tx - dx * r - nx * (r + g), ty - dy * r - ny * (r + g));
+            glEnd();
+        }
+        const char *name = o == 0 ? "P1" : "P2";
+        player_color(o, 1.0f);
+        draw_text(tx - dx * (r + 9.0f * px) - text_width(name, px) * 0.5f,
+                  ty - dy * (r + 9.0f * px) - 2.5f * px, px, name);
+    }
+
+    if (g_coop.out_of_sync) {
+        const char *t = "OUT OF SYNC";
+        glColor4f(1.0f, 0.25f, 0.2f, 1.0f);
+        draw_text(w * 0.5f - text_width(t, px) * 0.5f, top + bar_h + 8.0f * u, px, t);
+    }
 }
 
 static int s_swap_count = 0;
@@ -284,8 +426,16 @@ EGLBoolean CDECL wrap_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         SDL_GL_GetDrawableSize(g_egl_window, &w, &h);
         net_host_capture_frame(w, h);
     }
-    if (g_egl_window && g_cursor_visible) {
-        draw_cursor_overlay();
+    int coop = g_coop_frames > 0;
+    if (g_coop_frames > 0) g_coop_frames--;
+    if (g_egl_window && (g_cursor_visible || coop)) {
+        OverlayState st;
+        int w, h;
+        if (overlay_begin(&st, &w, &h)) {
+            if (coop) draw_coop_overlay(w, h);
+            if (g_cursor_visible) draw_cursor_overlay(w, h);
+            overlay_end(&st);
+        }
     }
     if (g_egl_window) {
         SDL_GL_SwapWindow(g_egl_window);

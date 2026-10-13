@@ -30,6 +30,16 @@ Instead of rewriting or recreating the game in Unity or another engine, this pro
    - Full OpenSL ES engine (`SLEngineItf`, `SLPlayItf`, `SLBufferQueueItf`, `SLVolumeItf`, `SLSeekItf`, `SLPlaybackRateItf`, `SLEffectSendItf`).
    - Streams in-game music, sound effects, and voice lines through a low-latency SDL2 circular audio buffer.
 
+6. **Gameplay Hooks (`native_port/hook_util.c`, `ai_hooks.c`, `gun_hooks.c`, `ui_nav.c`)**:
+   - Patches the original binary's GOT and vtables, never its code, apart from one patched call in `ZombieStateFollow::update`. Through those hooks: smarter zombies, mouse aim, recoil, rebalanced guns, threat-aware aim assist and controller menu navigation.
+
+7. **Multiplayer (`native_port/coop.c`, `net_host.c`, `guest.c`, `lockstep.c`, `determinism.c`)**:
+   - Player 2 joins as a companion character driven by a remote player. It runs either streamed from the host or in lockstep, where both PCs run the game and exchange only inputs.
+   - Lockstep relies on the game being deterministic. A virtual clock, pinned random seeds and a fixed date make it repeatable, and a record/replay test checks it.
+
+8. **Diagnostics (`native_port/watchdog.c`, `log.c`)**:
+   - A hang watchdog, a crash reporter and a non-blocking log writing to `game_log.txt`.
+
 ---
 
 ## Controls
@@ -48,13 +58,6 @@ Instead of rewriting or recreating the game in Unity or another engine, this pro
 Controllers rumble on shots (scaled by the weapon), when you take a hit, and when you die. Sticks use a radial deadzone, so small tilts give fine movement without snapping to the axes.
 
 In a level, keyboard, mouse aim and controller input are written straight into the game's stick state as exact vectors (the same path the engine's own gamepad support uses), rather than by emulating touches on the on-screen virtual sticks. `--touch-sticks` restores the old touch emulation.
-
---- | :--- | :--- | :--- |
-| **Move** | `W` `A` `S` `D` | — | Left Analog Stick |
-| **Aim & Shoot** | Arrow Keys / `I` `J` `K` `L` | Hold Left Button (aims at cursor) | Right Analog Stick |
-| **Menu Selection** | — | Left Click (Right Click on in-game HUD) | A Button / D-Pad |
-| **Action / Confirm** | `Space` / `Enter` | Left Click | A Button |
-| **Pause / Back** | `Escape` | — | B Button / Start |
 
 ---
 
@@ -123,7 +126,7 @@ The AI hooks into `ZombieStateFollow::update` in the original binary (`native_po
 ## Guns
 
 - **Mouse aiming:** during a level, hold the **left mouse button** to aim at the cursor and fire, like a PC twin-stick shooter. Use the **right mouse button** to tap on-screen HUD buttons. In menus the left button clicks as before.
-- **Recoil kick:** every shot nudges the camera back along your aim, scaled by the weapon's punch (the shotgun kicks hard, the machine gun lightly). It stacks with the game's own screen shakes.
+- **Recoil kick:** every shot nudges the camera back along your aim, scaled by the weapon's punch (the shotgun kicks hard, the machine gun lightly). It stacks with the game's own screen shakes. (Off in own-world co-op.)
 - **Rebalanced:** your guns deal 20% more damage and ammo pickups hold 30% more rounds, to keep pace with the smarter horde.
 - **Smarter aim assist:** with the game's *Auto Aim* option switched on, the assist picks the most dangerous target near where you're aiming instead of just the nearest enemy: zombies about to reach you, throwers bombing you, and bosses. It reaches far enough to answer throwers holding back at range, and it never swings your aim more than 40° away from where you're pointing.
 
@@ -141,7 +144,19 @@ These hook the original binary through its GOT and vtables (`native_port/gun_hoo
 
 ## Online Co-op (Peer to Peer)
 
-Play the campaign with a friend over the internet or your local network. No server or account needed: one player hosts, the other joins directly.
+Play the campaign with a friend over the internet or your local network. No server or account needed: one player hosts, the other joins directly. There are two ways to play:
+
+| | Own-world co-op (`--lockstep-host` / `--lockstep-join`) | Streamed co-op (`--host` / `--join`) |
+| :--- | :--- | :--- |
+| Player 2's PC | Runs the full game | Shows a video stream of the host's game |
+| Picture and sound | Full resolution and frame rate, local sound | Compressed video (default 960 px, 30 fps) |
+| Bandwidth | A few kB/s | 3-12 Mbit/s upload from the host |
+| Player 2 needs | The same build and game files as the host | Only this program |
+| Input delay | 67 ms for both players (adjustable) | Player 2's round trip to the host |
+
+Own-world co-op is the better experience when both players have the game; streamed co-op works when player 2's PC can't run it. Both use TCP port 27015 and the same `--code`.
+
+### Streamed Co-op
 
 **Host (player 1):**
 ```cmd
@@ -171,16 +186,51 @@ run.bat --join 203.0.113.7
 
 At the defaults the stream needs roughly 8-12 Mbit/s of upload from the host; `--coop-width 640 --coop-quality 45` brings that to about 3-4 Mbit/s.
 
+### Own-World Co-op (each player runs the game)
+
+Instead of streaming video, both PCs run the full game and only controller input is sent (a few hundred bytes per frame). Each player gets full resolution, full frame rate and their own sound, with no compression artefacts, and it needs almost no bandwidth.
+
+**Host (player 1):**
+```cmd
+run.bat --lockstep-host
+```
+**Friend (player 2)**, with the host's IP address:
+```cmd
+run.bat --lockstep-join 203.0.113.7
+```
+
+- The host waits for player 2 before the game starts, then sends its saves and settings so both games start identically. Player 2's own saves are not touched; their copy lives in `saves_lockstep\`.
+- Once a level starts, player 2 appears as an extra character in **both** worlds. The host sees it beside them; player 2's screen follows player 2. Both screens show both players' health bars (`P1` / `P2`, with `YOU` on yours) and a marker over your partner, or an arrow at the screen edge pointing to them when they're off-screen.
+- The host drives the menus (player 2 sees them too). Each player's input takes effect after a short delay of 4 frames (67 ms) on both PCs, which hides the network delay. On a slow or distant connection, raise it with `--lockstep-delay 6` (host). If a game hitches, the other waits for it.
+- Both games compare a fingerprint of their worlds every second. If they ever differ, `OUT OF SYNC` appears on screen and `game_log.txt` says what differed. Please report it.
+- Both PCs need the same build and game files (checked when connecting). Player 2's window takes the host's window size, and the window can't be resized during the session. If either player quits, the other carries on alone.
+- Uses the same port (TCP 27015) and `--code` as streamed co-op. See *Connecting over the internet* above.
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--lockstep-host [port]` | `27015` | Host; waits for player 2 before the game starts |
+| `--lockstep-join <ip[:port]>` | — | Join a host as player 2 |
+| `--lockstep-delay <1-30>` | `4` | Host: input delay in frames (60 per second); raise it if the game stutters on a slow connection |
+| `--code <text>` | — | Join code; set the same on both sides |
+
+Camera recoil is switched off in this mode, because it would move the host's camera differently on the two PCs.
+
 ---
 
 ## Determinism Test
 
-A prerequisite for true multiplayer (each player running their own copy of the game, exchanging only inputs) is that the game produces exactly the same state from the same inputs. To check:
+Own-world co-op only works if the game produces exactly the same state from the same inputs. The port makes it do so:
+- a virtual clock advances exactly 1/60 s per frame;
+- the date is fixed;
+- the game's own random seed (normally taken from the CPU clock at startup) is pinned;
+- the smart AI's per-zombie choices don't depend on memory addresses.
+
+This test checks it:
 
 1. `run.bat --record test.rec` - play a level normally for a minute or two (don't resize the window), then quit. Inputs and a fingerprint of the game state for every frame are saved, with a snapshot of your saves in `test.rec.saves`.
 2. `run.bat --replay test.rec` - the recording plays back with no input from you. When it finishes, `game_log.txt` reports either `RESULT: IN SYNC` or the first frame where the state differed and what differed (characters, other entities, random numbers).
 
-Both runs use a virtual clock (exactly 1/60 s per frame), a fixed date and a scratch copy of the save snapshot (`saves_determinism/`), so your real saves are never touched. Co-op is disabled while testing.
+Both runs play from a scratch copy of the save snapshot (`saves_determinism/`), so your real saves are never touched. Co-op is disabled while testing.
 
 ---
 
@@ -198,3 +248,6 @@ If the game crashes, `crash_report.txt` records the exception, where it happened
 - `assets/`: Game shaders, font atlases, models, textures, patterns, sounds, and speech files.
 - `lib/x86/`: Original compiled Android x86 ELF library (`libminigore2.so`).
 - `saves/`: In-game save files and local progress are saved here.
+- `saves_lockstep/`: Own-world co-op player 2's copy of the host's saves (replaced each session).
+- `saves_determinism/`, `<file>.rec.saves/`: Scratch saves and the snapshot used by the determinism test.
+- `game_log.txt`, `hang_report.txt`, `crash_report.txt`: Diagnostics (see *Troubleshooting*).

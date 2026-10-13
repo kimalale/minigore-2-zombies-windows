@@ -2,6 +2,7 @@
 #include "hook_util.h"
 #include "ai_core.h"
 #include "determinism.h"
+#include "lockstep.h"
 #include <windows.h>
 #include <math.h>
 #include <stdint.h>
@@ -111,6 +112,8 @@ static volatile LONG g_player_shooting = 0;
 
 /* Published for the input thread */
 static volatile float g_player_sx, g_player_sy;
+static volatile LONG g_aim_origin_external = 0;  /* own-world co-op guest: player 2's position */
+static void *(*g_local_character)(void) = NULL;
 static volatile LONG g_controls_tick = 0;  /* GetTickCount of last human control update */
 
 /* Recoil state (game thread) */
@@ -178,7 +181,24 @@ int gun_project_ground_normalized(float x, float z, float *nx, float *ny) {
     return 1;
 }
 
+void gun_set_aim_origin(float x, float y) {
+    g_player_sx = x;
+    g_player_sy = y;
+    InterlockedExchange(&g_aim_origin_external, 1);
+}
+
+void gun_set_local_character(void *(*fn)(void)) {
+    g_local_character = fn;
+}
+
+/* The character this PC's player controls (rumble is for them) */
+static int is_local(const void *c) {
+    if (!c) return 0;
+    return c == (g_local_character ? g_local_character() : (void *)player_character());
+}
+
 static void publish_player_screen_pos(void) {
+    if (g_aim_origin_external) return;
     uint8_t *player = player_character();
     if (!player) return;
     const float *p = (const float *)(player + ENTITY_POS);
@@ -207,6 +227,15 @@ int gun_set_sticks(float move_x, float move_y, float aim_x, float aim_y) {
     return 1;
 }
 
+int gun_get_local_sticks(float sticks[4]) {
+    EnterCriticalSection(&g_stick_lock);
+    int fresh = g_sticks_tick != 0 && GetTickCount() - g_sticks_tick < 200;
+    if (fresh) memcpy(sticks, g_sticks, 16);
+    else memset(sticks, 0, 16);
+    LeaveCriticalSection(&g_stick_lock);
+    return fresh;
+}
+
 /* StateGame::updateControls zeroes the sticks and rebuilds them from
  * touches. Afterwards, write the exact vectors from the keyboard, mouse or
  * controller - the same globals the engine's own gamepad support writes on
@@ -221,10 +250,16 @@ static void __attribute__((cdecl)) h_update_controls(void *state, float dt) {
         return;
     }
     float s[4];
-    EnterCriticalSection(&g_stick_lock);
-    int fresh = g_sticks_tick != 0 && GetTickCount() - g_sticks_tick < 200;
-    memcpy(s, g_sticks, sizeof(s));
-    LeaveCriticalSection(&g_stick_lock);
+    int fresh;
+    if (lockstep_active()) {
+        /* own-world co-op: player 1's sticks for this frame, on both PCs */
+        fresh = lockstep_p1_sticks(s);
+    } else {
+        EnterCriticalSection(&g_stick_lock);
+        fresh = g_sticks_tick != 0 && GetTickCount() - g_sticks_tick < 200;
+        memcpy(s, g_sticks, sizeof(s));
+        LeaveCriticalSection(&g_stick_lock);
+    }
     float *sticks = (float *)(e + ENV_STICKS);
     if (!fresh) {
         det_sticks(sticks);
@@ -291,7 +326,7 @@ static void __attribute__((cdecl)) h_start_shake(void *shaker) {
 }
 
 static int __attribute__((cdecl)) h_die(void *self, const void *damage, float t) {
-    if (self == (void *)player_character()) request_rumble(1.0f, 0.8f, 600);
+    if (is_local(self)) request_rumble(1.0f, 0.8f, 600);
     return o_die(self, damage, t);
 }
 
@@ -317,7 +352,7 @@ static int __attribute__((cdecl)) h_fire_shot(void *self, float dt, unsigned ind
     int fired = o_fire_shot(self, dt, index) & 0xff;
     if (is_player) InterlockedExchange(&g_player_shooting, 0);
 
-    if (is_player && fired) {
+    if (fired && is_local(self)) {
         float strength = shot_strength((const uint8_t *)self);
         if (g_cfg.kick > 0.0f) {
             g_kick += strength * g_cfg.kick;

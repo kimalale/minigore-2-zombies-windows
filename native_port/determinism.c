@@ -1,5 +1,6 @@
 #include "determinism.h"
 #include "shims.h"
+#include "lockstep.h"
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -161,6 +162,20 @@ void det_advance_ns(uint64_t ns) {
  * the virtual clock a fixed 1 ms, or the loop would wait forever. */
 void det_idle(void) {
     if (g_mode != DET_OFF) det_advance_ns(1000000ULL);
+}
+
+uint32_t det_frame(void) {
+    return g_frame;
+}
+
+void det_rng_save(DetRng *r) {
+    r->rand48 = *shims_rand48_state();
+    r->random = g_random ? *g_random : 0;
+}
+
+void det_rng_restore(const DetRng *r) {
+    *(volatile long long *)shims_rand48_state() = r->rand48;
+    if (g_random) *g_random = r->random;
 }
 
 double det_sim_seconds(void) {
@@ -349,6 +364,8 @@ void det_install(elf_module_t *mod) {
         fwrite(&version, 4, 1, g_out);
         fwrite(&event_size, 4, 1, g_out);
         printf("[Determinism] Recording to %s - play normally, then quit\n", g_path);
+    } else if (g_mode == DET_LOCKSTEP) {
+        /* own-world co-op: same clock, seeds and fingerprints; inputs from lockstep.c */
     } else if (!load_replay()) {
         printf("[Determinism] Replay unavailable\n");
         g_mode = DET_OFF;
@@ -418,6 +435,24 @@ void det_set_screen(int w, int h) {
 void det_frame_end(void) {
     if (g_mode == DET_OFF) return;
     if (!g_game_thread) g_game_thread = GetCurrentThreadId();
+
+    if (g_mode == DET_LOCKSTEP) {
+        /* Compare worlds once a second; the frame ends when both players'
+         * inputs for the next one are in */
+        MsgLsHash h, *have = NULL;
+        if (g_frame % 60 == 0) {
+            Fingerprint f;
+            fingerprint(&f);
+            h.frame = g_frame;
+            h.characters = f.characters;
+            h.entities = f.entities;
+            h.rng = f.rng;
+            have = &h;
+        }
+        g_frame++;
+        lockstep_frame_end(g_frame, have);
+        return;
+    }
 
     Fingerprint fp;
     fingerprint(&fp);

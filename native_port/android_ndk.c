@@ -1,5 +1,6 @@
 #include "android_ndk.h"
 #include "determinism.h"
+#include "lockstep.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -277,6 +278,22 @@ void android_app_push_key_event(int action, int keycode) {
     if (g_looper_event) SetEvent(g_looper_event);
 }
 
+size_t android_app_event_size(void) {
+    return sizeof(NativeInputEvent);
+}
+
+int android_app_drain_events(void *out, int max) {
+    NativeInputEvent *dst = (NativeInputEvent *)out;
+    int n = 0;
+    EnterCriticalSection(&g_queue_cs);
+    while (n < max && g_event_head != g_event_tail) {
+        dst[n++] = g_event_queue[g_event_tail];
+        g_event_tail = (g_event_tail + 1) % MAX_EVENTS;
+    }
+    LeaveCriticalSection(&g_queue_cs);
+    return n;
+}
+
 void android_app_set_window_size(int width, int height) {
     g_window.width = width;
     g_window.height = height;
@@ -461,7 +478,11 @@ int CDECL wrap_ALooper_pollAll(int timeoutMillis, int *outFd, int *outEvents, vo
             LeaveCriticalSection(&g_queue_cs);
             return LOOPER_ID_MAIN;
         }
-        if (g_event_head != g_event_tail || det_replay_pending()) {
+        /* Own-world co-op: the game only sees player 1's scheduled events
+         * (this PC's own input waits in the queue for lockstep to send) */
+        int pending = lockstep_active() ? lockstep_event_pending()
+                                        : (g_event_head != g_event_tail || det_replay_pending());
+        if (pending) {
             if (outData) *outData = &g_app.inputPollSource;
             LeaveCriticalSection(&g_queue_cs);
             return LOOPER_ID_INPUT;
@@ -489,10 +510,12 @@ void CDECL wrap_AInputQueue_attachLooper(AInputQueue *queue, ALooper *looper, in
 void CDECL wrap_AInputQueue_detachLooper(AInputQueue *queue) {}
 
 int32_t CDECL wrap_AInputQueue_getEvent(AInputQueue *queue, AInputEvent **outEvent) {
-    if (det_replaying()) {
-        /* Determinism replay: the recorded events, frame by frame */
+    if (det_replaying() || lockstep_active()) {
+        /* Determinism replay: the recorded events, frame by frame; own-world
+         * co-op: player 1's events for this frame */
         NativeInputEvent tmp;
-        if (!det_replay_event(&tmp, sizeof(tmp))) return -1;
+        int got = lockstep_active() ? lockstep_take_event(&tmp, sizeof(tmp)) : det_replay_event(&tmp, sizeof(tmp));
+        if (!got) return -1;
         NativeInputEvent *ev = (NativeInputEvent *)malloc(sizeof(NativeInputEvent));
         *ev = tmp;
         *outEvent = (AInputEvent *)ev;

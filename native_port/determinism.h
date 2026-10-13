@@ -22,7 +22,7 @@ extern "C" {
  * advancing exactly 1/60 s per frame, a fixed date, the same save data
  * (a snapshot taken when recording), and focus changes ignored. */
 
-typedef enum { DET_OFF = 0, DET_RECORD, DET_REPLAY } DetMode;
+typedef enum { DET_OFF = 0, DET_RECORD, DET_REPLAY, DET_LOCKSTEP } DetMode;
 
 void det_configure(DetMode mode, const char *path);
 int det_active(void);
@@ -39,6 +39,12 @@ uint64_t det_now_ns(void);
 void det_advance_ns(uint64_t ns);       /* game sleeps */
 void det_idle(void);                    /* a game-loop pass that drew nothing */
 double det_sim_seconds(void);           /* for the AI */
+uint32_t det_frame(void);               /* frames presented so far */
+
+/* Both random generators, for drawing that must not consume them */
+typedef struct { long long rand48; uint32_t random; } DetRng;
+void det_rng_save(DetRng *r);
+void det_rng_restore(const DetRng *r);
 int64_t det_wall_time(void);            /* fixed date */
 
 /* Game thread hooks */

@@ -39,6 +39,15 @@ int gun_take_rumble(float *low, float *high, unsigned *ms);
  * Returns 1 if the direct path is available. */
 int gun_set_sticks(float move_x, float move_y, float aim_x, float aim_y);
 
+/* This PC's latest sticks (pad convention); 1 if live. Own-world co-op
+ * sends these to the other player. */
+int gun_get_local_sticks(float sticks[4]);
+
+/* Own-world co-op guest: aim from player 2's on-screen position (pixels),
+ * and rumble for the character returned by fn instead of player 1 */
+void gun_set_aim_origin(float x, float y);
+void gun_set_local_character(void *(*fn)(void));
+
 /* Projects a ground-plane world position to window pixels using the
  * game's last view-projection matrix. Returns 0 if it is behind the camera. */
 int gun_project_ground(float x, float z, float *sx, float *sy);
