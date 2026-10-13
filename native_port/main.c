@@ -60,6 +60,8 @@ static void print_usage(const char *exe) {
     printf("  --ai-encircle <f> Share of zombies that surround the player, 0-1 (default 0.75)\n");
     printf("  --ai-lead <f>     How far ahead of a moving player zombies aim, 0-1 (default 0.8)\n");
     printf("  --ai-spread <f>   How strongly zombies spread out from each other, 0-2 (default 0.4)\n");
+    printf("  --ai-no-throwers  Throwers walk straight in as before\n");
+    printf("  --ai-no-bosses    Bosses and minions don't coordinate\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
 }
 
@@ -101,6 +103,10 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             ai.lead = (float)atof(argv[++i]);
         } else if (strcmp(arg, "--ai-spread") == 0 && has_val) {
             ai.separation = (float)atof(argv[++i]);
+        } else if (strcmp(arg, "--ai-no-throwers") == 0) {
+            ai.ranged_tactics = 0;
+        } else if (strcmp(arg, "--ai-no-bosses") == 0) {
+            ai.boss_tactics = 0;
         } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
             print_usage(argv[0]);
             return 0;

@@ -89,6 +89,9 @@ By default zombies use a new pursuit AI instead of running straight at you in a 
 - **Interception:** zombies aim where you are heading, not where you were, which makes kiting in circles much less effective.
 - **Spreading out:** zombies keep a little distance from each other instead of stacking up into a conga line.
 - A share of zombies still charge straight in, and within a few body-lengths every zombie reverts to the original chase, so lunges and attacks work exactly as before.
+- **Throwers** (bomb and poison) act like artillery: they hold position near the edge of their throw range instead of walking into your guns, spread out around you in a slowly circling formation, and back off when you rush them.
+- **Bosses** charge straight at you, leading your movement, and the horde gets out of their way. While a boss is closing in, the other zombies gather on the far side of you, so backing away from the boss means backing into the horde.
+- Giants keep their original circling attack.
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
@@ -96,6 +99,8 @@ By default zombies use a new pursuit AI instead of running straight at you in a 
 | `--ai-encircle <0-1>` | `0.75` | Share of zombies that surround you (the rest charge straight in) |
 | `--ai-lead <0-1>` | `0.8` | How far ahead of a moving player zombies aim |
 | `--ai-spread <0-2>` | `0.4` | How strongly zombies spread out from each other |
+| `--ai-no-throwers` | — | Throwers walk straight in as before |
+| `--ai-no-bosses` | — | Bosses and the horde don't coordinate |
 
 The AI hooks into `ZombieStateFollow::update` in the original binary (`native_port/ai_hooks.c`); the steering itself lives in `native_port/ai_core.c`.
 

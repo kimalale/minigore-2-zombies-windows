@@ -30,11 +30,23 @@ static const uint8_t k_expected[10] = {
 };
 
 /* Game structure offsets (see ZombieStateFollow::update / Zombie::move) */
-#define ENTITY_POS     0x04  /* Vector2 position */
-#define ZOMBIE_RADIUS  0x24  /* collision radius */
-#define ZOMBIE_TARGET  0x48  /* Vector2 steering target */
+#define ENTITY_POS       0x04   /* Vector2 position */
+#define ENTITY_TYPE      0x2c   /* uint64 entity type flags */
+#define ZOMBIE_RADIUS    0x24   /* collision radius */
+#define ZOMBIE_TARGET    0x48   /* Vector2 steering target */
+#define ZOMBIE_BEHAVIOR  0x13c  /* Behavior* (class decides how it fights) */
+#define VTBL_GET_ATTACK_RADIUS 0x34 /* Behavior::getAttackRadius() const */
+
+/* Thrower variants with a fixed long throw range (BehaviorThrower::
+ * getAttackRadius returns 250 for these; others melee or roll randomly) */
+#define TYPE_THROWER_A   0x400ull
+#define TYPE_THROWER_B   0x800ull
+
+typedef float (__attribute__((cdecl)) *GetAttackRadiusFn)(void *self);
 
 static LARGE_INTEGER g_qpc_freq;
+static uintptr_t g_vtbl_thrower = 0; /* address stored in objects: vtable + 8 */
+static uintptr_t g_vtbl_boss = 0;
 
 void follow_stub(void) __asm__("ai_follow_stub");
 void ai_follow_entry(uint8_t *zombie, uint8_t *chased) __asm__("ai_follow_entry");
@@ -50,9 +62,27 @@ void ai_follow_entry(uint8_t *zombie, uint8_t *chased) {
     QueryPerformanceCounter(&now);
     double t = (double)now.QuadPart / (double)g_qpc_freq.QuadPart;
 
+    /* Classify by Behavior class */
+    AiRole role = AI_ROLE_MELEE;
+    float attack_radius = 0.0f;
+    void *behavior = *(void **)(zombie + ZOMBIE_BEHAVIOR);
+    if (behavior) {
+        uintptr_t vtbl = *(uintptr_t *)behavior;
+        if (vtbl == g_vtbl_boss) {
+            role = AI_ROLE_BOSS;
+        } else if (vtbl == g_vtbl_thrower) {
+            uint64_t type = *(const uint64_t *)(zombie + ENTITY_TYPE);
+            if (type == TYPE_THROWER_A || type == TYPE_THROWER_B) {
+                GetAttackRadiusFn fn = *(GetAttackRadiusFn *)(vtbl + VTBL_GET_ATTACK_RADIUS);
+                attack_radius = fn(behavior);
+                if (attack_radius > radius * 3.0f) role = AI_ROLE_RANGED;
+            }
+        }
+    }
+
     AiVec2 z = { zp[0], zp[1] };
     AiVec2 p = { pp[0], pp[1] };
-    AiVec2 out = ai_follow_target((uintptr_t)zombie, z, radius, p, t);
+    AiVec2 out = ai_follow_target((uintptr_t)zombie, role, z, radius, attack_radius, p, t);
     if (out.x != out.x || out.y != out.y) {
         out = p; /* never hand the game a NaN */
     }
@@ -112,6 +142,9 @@ int ai_hooks_install(elf_module_t *mod) {
     }
 
     QueryPerformanceFrequency(&g_qpc_freq);
+    uintptr_t vt;
+    if ((vt = elf_sym(mod, "_ZTV15BehaviorThrower")) != 0) g_vtbl_thrower = vt + 8;
+    if ((vt = elf_sym(mod, "_ZTV12BehaviorBoss")) != 0) g_vtbl_boss = vt + 8;
 
     DWORD old_protect;
     if (!VirtualProtect(site, sizeof(k_expected), PAGE_EXECUTE_READWRITE, &old_protect)) {
@@ -125,8 +158,11 @@ int ai_hooks_install(elf_module_t *mod) {
     VirtualProtect(site, sizeof(k_expected), old_protect, &old_protect);
     FlushInstructionCache(GetCurrentProcess(), site, sizeof(k_expected));
 
-    printf("[AI] Smart zombie AI enabled: %.0f%% encircle (up to %.0f deg), lead %.1f, separation %.1f\n",
-           cfg->flank_fraction * 100.0f, cfg->flank_degrees, cfg->lead, cfg->separation);
+    printf("[AI] Smart zombie AI enabled: %.0f%% encircle (up to %.0f deg), lead %.1f, separation %.1f, "
+           "thrower tactics %s, boss tactics %s\n",
+           cfg->flank_fraction * 100.0f, cfg->flank_degrees, cfg->lead, cfg->separation,
+           (cfg->ranged_tactics && g_vtbl_thrower) ? "on" : "off",
+           (cfg->boss_tactics && g_vtbl_boss) ? "on" : "off");
     fflush(stdout);
     return 1;
 }
