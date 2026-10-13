@@ -135,8 +135,11 @@ static void input_process(struct android_app *app, struct android_poll_source *s
 
 /* Dummy JavaVM to safely disable JNI without crash */
 static int32_t CDECL dummy_AttachCurrentThread(void *vm, void **p_env, void *thr_args) {
-    printf("[JNI] dummy_AttachCurrentThread called -> returning JNI_ERR (-1)\n");
-    fflush(stdout);
+    static volatile LONG calls = 0;
+    if (InterlockedIncrement(&calls) <= 3) {
+        printf("[JNI] AttachCurrentThread -> JNI_ERR (no Java on Windows)\n");
+    }
+    if (p_env) *p_env = NULL;
     return -1;
 }
 
