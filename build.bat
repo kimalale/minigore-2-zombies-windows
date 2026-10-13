@@ -8,7 +8,7 @@ echo =========================================================
 set PATH=C:\msys64\mingw32\bin;%PATH%
 
 set CFLAGS=-O2 -Wall -Wno-unused-function -Wno-unused-variable -I native_port -I C:\msys64\mingw32\include
-set LDFLAGS=-L C:\msys64\mingw32\lib -Wl,--stack=16777216 -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lws2_32 -lm
+set LDFLAGS=-L C:\msys64\mingw32\lib -Wl,--stack=16777216 -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lws2_32 -lwinmm -lm
 
 echo Compiling native host sources...
 gcc %CFLAGS% ^
@@ -19,6 +19,7 @@ gcc %CFLAGS% ^
     native_port\android_ndk.c ^
     native_port\opensles.c ^
     native_port\shims.c ^
+    native_port\watchdog.c ^
     %LDFLAGS% ^
     -o Minigore2_Windows.exe
 

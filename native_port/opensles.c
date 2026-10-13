@@ -13,6 +13,7 @@ typedef uint32_t SLboolean;
 typedef int16_t  SLmillibel;
 
 #define SL_RESULT_SUCCESS 0
+#define SL_RESULT_BUFFER_INSUFFICIENT 7
 #define SL_BOOLEAN_FALSE  0
 #define SL_BOOLEAN_TRUE   1
 #define SL_PLAYSTATE_STOPPED 1
@@ -209,7 +210,8 @@ typedef struct {
 } PlayerESItf;
 
 #define MAX_OPENSL_PLAYERS 64
-#define PLAYER_RING_SIZE (128 * 1024)
+#define PLAYER_RING_INITIAL (128 * 1024) /* grows on demand; always a multiple of 4 */
+#define OUTPUT_RATE 44100
 #define MAX_PENDING_BUFFERS 32
 
 typedef struct {
@@ -232,7 +234,8 @@ typedef struct OpenSLPlayer {
     int channels;    /* 1 = mono, 2 = stereo */
     int sample_rate; /* 44100 */
     
-    uint8_t ring_buf[PLAYER_RING_SIZE];
+    uint8_t *ring_buf;
+    uint32_t ring_size;
     uint32_t ring_read;
     uint32_t ring_write;
     
@@ -242,6 +245,8 @@ typedef struct OpenSLPlayer {
     int pending_count;
     
     uint32_t play_index;
+    uint32_t resample_frac; /* 16.16 position between source frames */
+    uint32_t generation;    /* bumped on Destroy, invalidates queued callbacks */
     
     slBufferQueueCallback bq_callback;
     void *bq_context;
@@ -263,6 +268,9 @@ static GlobalObjItf    s_mix_obj;
 static OpenSLPlayer g_players[MAX_OPENSL_PLAYERS];
 static SDL_AudioDeviceID g_audio_dev = 0;
 static SDL_mutex *g_audio_mutex = NULL;
+/* Held while buffer-queue callbacks run so Destroy can wait for them,
+ * as on Android. Separate from g_audio_mutex so callbacks may Enqueue. */
+static SDL_mutex *g_callback_mutex = NULL;
 
 /* Vtable instances */
 static struct SLObjectItf_       s_engine_obj_vtable;
@@ -276,17 +284,42 @@ static struct SLPlaybackRateItf_ s_pr_vtable;
 static struct SLEffectSendItf_   s_es_vtable;
 
 /* Audio Mixer Callback */
+typedef struct {
+    OpenSLPlayer *player;
+    uint32_t generation;
+    slBufferQueueCallback callback;
+    void *context;
+} PendingCallback;
+
+#define MAX_PENDING_CALLBACKS (MAX_OPENSL_PLAYERS * MAX_PENDING_BUFFERS)
+
+static void queue_buffer_done(OpenSLPlayer *player, PendingCallback *cbs, int *cb_count) {
+    player->pending_head = (player->pending_head + 1) % MAX_PENDING_BUFFERS;
+    player->pending_count--;
+    player->play_index++;
+    if (player->bq_callback && *cb_count < MAX_PENDING_CALLBACKS) {
+        PendingCallback *cb = &cbs[(*cb_count)++];
+        cb->player = player;
+        cb->generation = player->generation;
+        cb->callback = player->bq_callback;
+        cb->context = player->bq_context;
+    }
+}
+
+static const int16_t *ring_frame(const OpenSLPlayer *player, uint32_t frame) {
+    return (const int16_t *)&player->ring_buf[(player->ring_read + frame * 4) % player->ring_size];
+}
+
 static void sdl_audio_cb(void *userdata, Uint8 *stream, int len) {
-    memset(stream, 0, len);
-    
     int16_t *out = (int16_t *)stream;
-    int samples_to_render = len / sizeof(int16_t);
+    int samples_to_render = len / (int)sizeof(int16_t);
     
     static int32_t mix[8192];
     if (samples_to_render > 8192) samples_to_render = 8192;
     memset(mix, 0, samples_to_render * sizeof(int32_t));
+    int out_frames = samples_to_render / 2;
     
-    OpenSLPlayer *cb_players[MAX_OPENSL_PLAYERS];
+    static PendingCallback cbs[MAX_PENDING_CALLBACKS];
     int cb_count = 0;
     
     SDL_LockMutex(g_audio_mutex);
@@ -294,18 +327,10 @@ static void sdl_audio_cb(void *userdata, Uint8 *stream, int len) {
         OpenSLPlayer *player = &g_players[p];
         if (!player->in_use || player->play_state != SL_PLAYSTATE_PLAYING) continue;
         
-        int available = (player->ring_write - player->ring_read + PLAYER_RING_SIZE) % PLAYER_RING_SIZE;
-        if (available == 0) {
-            if (player->pending_count > 0) {
-                while (player->pending_count > 0) {
-                    player->pending_head = (player->pending_head + 1) % MAX_PENDING_BUFFERS;
-                    player->pending_count--;
-                    player->play_index++;
-                    if (player->bq_callback && cb_count < MAX_OPENSL_PLAYERS) {
-                        cb_players[cb_count++] = player;
-                    }
-                }
-            }
+        uint32_t available = (player->ring_write - player->ring_read + player->ring_size) % player->ring_size;
+        uint32_t avail_frames = available / 4;
+        if (avail_frames == 0) {
+            while (player->pending_count > 0) queue_buffer_done(player, cbs, &cb_count);
             continue;
         }
         
@@ -316,29 +341,34 @@ static void sdl_audio_cb(void *userdata, Uint8 *stream, int len) {
         }
         int vol_int = (int)(vol * 256.0f);
         
-        int bytes_to_read = (available < len) ? available : len;
-        bytes_to_read &= ~3; /* Align to 4-byte stereo frames */
-        int samples_to_mix = bytes_to_read / sizeof(int16_t);
-        
-        for (int i = 0; i < samples_to_mix; i++) {
-            int16_t s = *(int16_t *)&player->ring_buf[player->ring_read];
-            player->ring_read = (player->ring_read + 2) % PLAYER_RING_SIZE;
-            mix[i] += (s * vol_int) >> 8;
+        /* Resample to the 44.1 kHz output with linear interpolation.
+         * Sources such as the 22 kHz speech used to play at double speed. */
+        uint32_t rate = player->sample_rate > 0 ? (uint32_t)player->sample_rate : OUTPUT_RATE;
+        uint32_t step = (uint32_t)(((uint64_t)rate << 16) / OUTPUT_RATE);
+        uint32_t consumed = 0;
+        for (int f = 0; f < out_frames && consumed < avail_frames; f++) {
+            const int16_t *a = ring_frame(player, consumed);
+            const int16_t *b = (consumed + 1 < avail_frames) ? ring_frame(player, consumed + 1) : a;
+            int32_t t = (int32_t)(player->resample_frac >> 1); /* 15-bit weight avoids overflow */
+            int32_t l = a[0] + (((int32_t)b[0] - a[0]) * t >> 15);
+            int32_t r = a[1] + (((int32_t)b[1] - a[1]) * t >> 15);
+            mix[f * 2]     += (l * vol_int) >> 8;
+            mix[f * 2 + 1] += (r * vol_int) >> 8;
+            player->resample_frac += step;
+            consumed += player->resample_frac >> 16;
+            player->resample_frac &= 0xFFFF;
         }
+        if (consumed > avail_frames) consumed = avail_frames;
+        player->ring_read = (player->ring_read + consumed * 4) % player->ring_size;
         
         /* Decrement byte counter from pending buffer FIFO */
-        int bytes_left = bytes_to_read;
+        uint32_t bytes_left = consumed * 4;
         while (bytes_left > 0 && player->pending_count > 0) {
             uint32_t *p_rem = &player->pending[player->pending_head].bytes_remaining;
-            if ((uint32_t)bytes_left >= *p_rem) {
+            if (bytes_left >= *p_rem) {
                 bytes_left -= *p_rem;
                 *p_rem = 0;
-                player->pending_head = (player->pending_head + 1) % MAX_PENDING_BUFFERS;
-                player->pending_count--;
-                player->play_index++;
-                if (player->bq_callback && cb_count < MAX_OPENSL_PLAYERS) {
-                    cb_players[cb_count++] = player;
-                }
+                queue_buffer_done(player, cbs, &cb_count);
             } else {
                 *p_rem -= bytes_left;
                 bytes_left = 0;
@@ -346,16 +376,8 @@ static void sdl_audio_cb(void *userdata, Uint8 *stream, int len) {
         }
         
         /* If ring buffer emptied out, drain all remaining pending buffers */
-        int rem = (player->ring_write - player->ring_read + PLAYER_RING_SIZE) % PLAYER_RING_SIZE;
-        if (rem == 0 && player->pending_count > 0) {
-            while (player->pending_count > 0) {
-                player->pending_head = (player->pending_head + 1) % MAX_PENDING_BUFFERS;
-                player->pending_count--;
-                player->play_index++;
-                if (player->bq_callback && cb_count < MAX_OPENSL_PLAYERS) {
-                    cb_players[cb_count++] = player;
-                }
-            }
+        if (player->ring_read == player->ring_write) {
+            while (player->pending_count > 0) queue_buffer_done(player, cbs, &cb_count);
         }
     }
     SDL_UnlockMutex(g_audio_mutex);
@@ -366,14 +388,19 @@ static void sdl_audio_cb(void *userdata, Uint8 *stream, int len) {
         else if (s < -32768) s = -32768;
         out[i] = (int16_t)s;
     }
-    
-    /* Fire completed buffer callbacks outside the audio mutex */
-    for (int i = 0; i < cb_count; i++) {
-        OpenSLPlayer *pl = cb_players[i];
-        if (pl->bq_callback) {
-            pl->bq_callback((SLBufferQueueItf)&pl->bq_itf, pl->bq_context);
-        }
+    if (samples_to_render * (int)sizeof(int16_t) < len) {
+        memset(stream + samples_to_render * sizeof(int16_t), 0, len - samples_to_render * sizeof(int16_t));
     }
+    
+    /* Fire completed buffer callbacks outside the audio mutex, skipping any
+     * whose player was destroyed (and possibly reused) in the meantime */
+    SDL_LockMutex(g_callback_mutex);
+    for (int i = 0; i < cb_count; i++) {
+        PendingCallback *cb = &cbs[i];
+        if (cb->player->generation != cb->generation) continue;
+        cb->callback((SLBufferQueueItf)&cb->player->bq_itf, cb->context);
+    }
+    SDL_UnlockMutex(g_callback_mutex);
 }
 
 /* Object Interface Implementations */
@@ -391,7 +418,10 @@ static void CDECL obj_Destroy(SLObjectItf self) {
     PlayerObjItf *obj = (PlayerObjItf *)self;
     OpenSLPlayer *player = obj->player;
     if (player) {
+        /* Wait for in-flight callbacks, like Android's Destroy */
+        SDL_LockMutex(g_callback_mutex);
         SDL_LockMutex(g_audio_mutex);
+        player->generation++;
         player->in_use = 0;
         player->play_state = SL_PLAYSTATE_STOPPED;
         player->pending_count = 0;
@@ -402,6 +432,7 @@ static void CDECL obj_Destroy(SLObjectItf self) {
         player->bq_callback = NULL;
         player->bq_context = NULL;
         SDL_UnlockMutex(g_audio_mutex);
+        SDL_UnlockMutex(g_callback_mutex);
     }
 }
 
@@ -473,13 +504,17 @@ static SLresult CDECL engine_CreateAudioPlayer(SLEngineItf self, SLObjectItf *pP
         player = &g_players[0];
     }
     
-    memset(player->ring_buf, 0, sizeof(player->ring_buf));
+    if (!player->ring_buf) {
+        player->ring_buf = (uint8_t *)calloc(1, PLAYER_RING_INITIAL);
+        player->ring_size = PLAYER_RING_INITIAL;
+    }
     player->ring_read = 0;
     player->ring_write = 0;
     player->pending_head = 0;
     player->pending_tail = 0;
     player->pending_count = 0;
     player->play_index = 0;
+    player->resample_frac = 0;
     player->play_state = SL_PLAYSTATE_STOPPED;
     player->volume_level = 0;
     player->bq_callback = NULL;
@@ -572,6 +607,35 @@ static SLresult CDECL bq_Enqueue(SLBufferQueueItf self, const void *pBuffer, SLu
     if (!player) return SL_RESULT_SUCCESS;
     
     SDL_LockMutex(g_audio_mutex);
+    
+    /* Too many buffers in flight: refuse, as Android does. Accepting it
+     * used to lose the buffer's completion callback, stalling the stream. */
+    if (player->pending_count >= MAX_PENDING_BUFFERS) {
+        SDL_UnlockMutex(g_audio_mutex);
+        return SL_RESULT_BUFFER_INSUFFICIENT;
+    }
+    
+    /* Grow the ring instead of overwriting unread audio */
+    uint32_t needed = (player->channels == 1) ? (size / 2) * 4 : size;
+    uint32_t used = (player->ring_write - player->ring_read + player->ring_size) % player->ring_size;
+    if (needed + used + 4 > player->ring_size) {
+        uint32_t new_size = player->ring_size;
+        while (needed + used + 4 > new_size) new_size *= 2;
+        uint8_t *grown = (uint8_t *)malloc(new_size);
+        if (!grown) {
+            SDL_UnlockMutex(g_audio_mutex);
+            return SL_RESULT_BUFFER_INSUFFICIENT;
+        }
+        for (uint32_t i = 0; i < used; i++) {
+            grown[i] = player->ring_buf[(player->ring_read + i) % player->ring_size];
+        }
+        free(player->ring_buf);
+        player->ring_buf = grown;
+        player->ring_size = new_size;
+        player->ring_read = 0;
+        player->ring_write = used;
+    }
+    
     uint32_t bytes_written = 0;
     if (player->channels == 1) {
         /* Expand 16-bit Mono PCM to 16-bit Stereo PCM */
@@ -580,9 +644,9 @@ static SLresult CDECL bq_Enqueue(SLBufferQueueItf self, const void *pBuffer, SLu
         for (uint32_t i = 0; i < num_samples; i++) {
             int16_t s = src[i];
             *(int16_t *)&player->ring_buf[player->ring_write] = s;
-            player->ring_write = (player->ring_write + 2) % PLAYER_RING_SIZE;
+            player->ring_write = (player->ring_write + 2) % player->ring_size;
             *(int16_t *)&player->ring_buf[player->ring_write] = s;
-            player->ring_write = (player->ring_write + 2) % PLAYER_RING_SIZE;
+            player->ring_write = (player->ring_write + 2) % player->ring_size;
         }
         bytes_written = num_samples * 4;
     } else {
@@ -590,16 +654,14 @@ static SLresult CDECL bq_Enqueue(SLBufferQueueItf self, const void *pBuffer, SLu
         const uint8_t *src = (const uint8_t *)pBuffer;
         for (uint32_t i = 0; i < size; i++) {
             player->ring_buf[player->ring_write] = src[i];
-            player->ring_write = (player->ring_write + 1) % PLAYER_RING_SIZE;
+            player->ring_write = (player->ring_write + 1) % player->ring_size;
         }
         bytes_written = size;
     }
     
-    if (player->pending_count < MAX_PENDING_BUFFERS) {
-        player->pending[player->pending_tail].bytes_remaining = bytes_written;
-        player->pending_tail = (player->pending_tail + 1) % MAX_PENDING_BUFFERS;
-        player->pending_count++;
-    }
+    player->pending[player->pending_tail].bytes_remaining = bytes_written;
+    player->pending_tail = (player->pending_tail + 1) % MAX_PENDING_BUFFERS;
+    player->pending_count++;
     SDL_UnlockMutex(g_audio_mutex);
     return SL_RESULT_SUCCESS;
 }
@@ -715,6 +777,7 @@ static SLresult CDECL es_GetSendLevel(SLEffectSendItf self, const void *pAuxEffe
 
 void opensles_init(void) {
     g_audio_mutex = SDL_CreateMutex();
+    g_callback_mutex = SDL_CreateMutex();
     memset(g_players, 0, sizeof(g_players));
     
     /* Setup engine object vtable */
@@ -839,6 +902,10 @@ void opensles_shutdown(void) {
     if (g_audio_mutex) {
         SDL_DestroyMutex(g_audio_mutex);
         g_audio_mutex = NULL;
+    }
+    if (g_callback_mutex) {
+        SDL_DestroyMutex(g_callback_mutex);
+        g_callback_mutex = NULL;
     }
 }
 

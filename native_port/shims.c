@@ -1,4 +1,5 @@
 #include "shims.h"
+#include "watchdog.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <windows.h>
+#include <mmsystem.h>
 #include <io.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -220,120 +222,153 @@ static int CDECL shim_nanosleep(const struct timespec *req, struct timespec *rem
     return 0;
 }
 
-/* Pthread shims */
-#define MUTEX_MAP_CAP 4096
+/* Pthread shims
+ *
+ * Bionic's pthread_mutex_t and pthread_cond_t are a single 32-bit word whose
+ * static initializers are small constants (0 for normal mutexes and
+ * condition variables, 0x4000 / 0x8000 for recursive / error-checking
+ * mutexes). We keep a pointer to a host object in that word, created on
+ * first use. It fits exactly, so neighbouring C++ fields are never touched,
+ * and there is no global table that can fill up.
+ *
+ * (The previous fixed 4096-slot address map never released entries for
+ * mutexes whose memory was freed without pthread_mutex_destroy. Once it
+ * filled, every lock scanned all 4096 slots under a global lock and then
+ * silently became a no-op, causing data races and stalls partway into a
+ * play session.) */
+
+#define HOST_MUTEX_MAGIC 0x3158544Du /* "MTX1" */
+#define HOST_COND_MAGIC  0x31444E43u /* "CND1" */
+
+/* Upper bound on a condition wait before re-checking. POSIX allows spurious
+ * wakeups, so this only guards against lost wakeups in game code. */
+#define COND_WAIT_SLICE_MS 50
 
 typedef struct {
-    void *key;
+    uint32_t magic;
     CRITICAL_SECTION cs;
-} MutexEntry;
+} HostMutex;
 
-static MutexEntry g_mutex_map[MUTEX_MAP_CAP];
-static CRITICAL_SECTION g_map_lock;
-static volatile LONG g_map_inited = 0;
+typedef struct {
+    uint32_t magic;
+    CONDITION_VARIABLE cv;
+} HostCond;
 
-static void init_mutex_map(void) {
-    if (InterlockedCompareExchange(&g_map_inited, 1, 0) == 0) {
-        InitializeCriticalSection(&g_map_lock);
-        memset(g_mutex_map, 0, sizeof(g_mutex_map));
+static volatile LONG g_mutex_count = 0;
+static volatile LONG g_cond_count = 0;
+
+/* Values below 64K are Bionic initializer constants, never our pointers. */
+static int is_host_ptr(LONG v) {
+    return (uint32_t)v >= 0x10000u;
+}
+
+static HostMutex *get_host_mutex(void *mutex) {
+    volatile LONG *slot = (volatile LONG *)mutex;
+    for (;;) {
+        LONG v = *slot;
+        if (is_host_ptr(v) && ((HostMutex *)(uintptr_t)v)->magic == HOST_MUTEX_MAGIC) {
+            return (HostMutex *)(uintptr_t)v;
+        }
+        HostMutex *m = (HostMutex *)calloc(1, sizeof(HostMutex));
+        InitializeCriticalSection(&m->cs);
+        m->magic = HOST_MUTEX_MAGIC;
+        if (InterlockedCompareExchange(slot, (LONG)(uintptr_t)m, v) == v) {
+            InterlockedIncrement(&g_mutex_count);
+            return m;
+        }
+        /* Another thread initialised it first */
+        DeleteCriticalSection(&m->cs);
+        free(m);
     }
 }
 
-static CRITICAL_SECTION *get_mutex_cs(void *mutex) {
-    if (!mutex || mutex == (void *)(uintptr_t)-1) return NULL;
-    if (!g_map_inited) init_mutex_map();
-    
-    uintptr_t h = (uintptr_t)mutex;
-    uint32_t idx = (uint32_t)((h * 2654435761u) >> 20) & (MUTEX_MAP_CAP - 1);
-    
-    EnterCriticalSection(&g_map_lock);
-    int first_tombstone = -1;
-    for (uint32_t i = 0; i < MUTEX_MAP_CAP; i++) {
-        uint32_t slot = (idx + i) & (MUTEX_MAP_CAP - 1);
-        if (g_mutex_map[slot].key == mutex) {
-            LeaveCriticalSection(&g_map_lock);
-            return &g_mutex_map[slot].cs;
+static HostCond *get_host_cond(void *cond) {
+    volatile LONG *slot = (volatile LONG *)cond;
+    for (;;) {
+        LONG v = *slot;
+        if (is_host_ptr(v) && ((HostCond *)(uintptr_t)v)->magic == HOST_COND_MAGIC) {
+            return (HostCond *)(uintptr_t)v;
         }
-        if (g_mutex_map[slot].key == (void *)(uintptr_t)-1 && first_tombstone == -1) {
-            first_tombstone = slot;
+        HostCond *c = (HostCond *)calloc(1, sizeof(HostCond));
+        InitializeConditionVariable(&c->cv);
+        c->magic = HOST_COND_MAGIC;
+        if (InterlockedCompareExchange(slot, (LONG)(uintptr_t)c, v) == v) {
+            InterlockedIncrement(&g_cond_count);
+            return c;
         }
-        if (g_mutex_map[slot].key == NULL) {
-            uint32_t use_slot = (first_tombstone != -1) ? (uint32_t)first_tombstone : slot;
-            g_mutex_map[use_slot].key = mutex;
-            InitializeCriticalSection(&g_mutex_map[use_slot].cs);
-            LeaveCriticalSection(&g_map_lock);
-            return &g_mutex_map[use_slot].cs;
-        }
+        free(c);
     }
-    if (first_tombstone != -1) {
-        g_mutex_map[first_tombstone].key = mutex;
-        InitializeCriticalSection(&g_mutex_map[first_tombstone].cs);
-        LeaveCriticalSection(&g_map_lock);
-        return &g_mutex_map[first_tombstone].cs;
-    }
-    LeaveCriticalSection(&g_map_lock);
-    return NULL;
 }
 
 static int CDECL shim_pthread_mutex_init(void *mutex, const void *attr) {
-    if (mutex) get_mutex_cs(mutex);
+    /* Created lazily on first lock; CRITICAL_SECTIONs are always recursive */
+    if (mutex) *(volatile LONG *)mutex = 0;
     return 0;
 }
 
 static int CDECL shim_pthread_mutex_destroy(void *mutex) {
-    if (!mutex || !g_map_inited) return 0;
-    EnterCriticalSection(&g_map_lock);
-    uintptr_t h = (uintptr_t)mutex;
-    uint32_t idx = (uint32_t)((h * 2654435761u) >> 20) & (MUTEX_MAP_CAP - 1);
-    for (uint32_t i = 0; i < MUTEX_MAP_CAP; i++) {
-        uint32_t slot = (idx + i) & (MUTEX_MAP_CAP - 1);
-        if (g_mutex_map[slot].key == mutex) {
-            DeleteCriticalSection(&g_mutex_map[slot].cs);
-            g_mutex_map[slot].key = (void *)(uintptr_t)-1;
-            break;
+    if (!mutex) return 0;
+    LONG v = InterlockedExchange((volatile LONG *)mutex, 0);
+    if (is_host_ptr(v)) {
+        HostMutex *m = (HostMutex *)(uintptr_t)v;
+        if (m->magic == HOST_MUTEX_MAGIC) {
+            m->magic = 0;
+            DeleteCriticalSection(&m->cs);
+            free(m);
+            InterlockedDecrement(&g_mutex_count);
         }
-        if (g_mutex_map[slot].key == NULL) break;
     }
-    LeaveCriticalSection(&g_map_lock);
     return 0;
 }
 
 static int CDECL shim_pthread_mutex_lock(void *mutex) {
     if (!mutex) return 0;
-    CRITICAL_SECTION *cs = get_mutex_cs(mutex);
-    if (cs) EnterCriticalSection(cs);
+    EnterCriticalSection(&get_host_mutex(mutex)->cs);
     return 0;
 }
 
 static int CDECL shim_pthread_mutex_unlock(void *mutex) {
     if (!mutex) return 0;
-    CRITICAL_SECTION *cs = get_mutex_cs(mutex);
-    if (cs) LeaveCriticalSection(cs);
+    LeaveCriticalSection(&get_host_mutex(mutex)->cs);
     return 0;
 }
 
 static int CDECL shim_pthread_cond_init(void *cv, const void *attr) {
+    if (cv) *(volatile LONG *)cv = 0;
     return 0;
 }
 
 static int CDECL shim_pthread_cond_destroy(void *cv) {
-    return 0;
-}
-
-static int CDECL shim_pthread_cond_wait(void *cv, void *mutex) {
-    if (mutex) {
-        CRITICAL_SECTION *cs = get_mutex_cs(mutex);
-        if (cs) {
-            LeaveCriticalSection(cs);
-            Sleep(1);
-            EnterCriticalSection(cs);
+    if (!cv) return 0;
+    LONG v = InterlockedExchange((volatile LONG *)cv, 0);
+    if (is_host_ptr(v)) {
+        HostCond *c = (HostCond *)(uintptr_t)v;
+        if (c->magic == HOST_COND_MAGIC) {
+            c->magic = 0;
+            free(c);
+            InterlockedDecrement(&g_cond_count);
         }
     }
     return 0;
 }
 
-static int CDECL shim_pthread_cond_broadcast(void *cv) {
+static int CDECL shim_pthread_cond_wait(void *cv, void *mutex) {
+    if (!cv || !mutex) return 0;
+    /* Previously this was unlock + Sleep(1) + lock, which with the default
+     * 15.6 ms timer resolution added a frame of latency to every hand-off
+     * between game threads. */
+    SleepConditionVariableCS(&get_host_cond(cv)->cv, &get_host_mutex(mutex)->cs, COND_WAIT_SLICE_MS);
     return 0;
+}
+
+static int CDECL shim_pthread_cond_broadcast(void *cv) {
+    if (cv) WakeAllConditionVariable(&get_host_cond(cv)->cv);
+    return 0;
+}
+
+void shims_get_sync_stats(long *mutexes, long *conds) {
+    *mutexes = g_mutex_count;
+    *conds = g_cond_count;
 }
 
 /* Thread tracking */
@@ -417,6 +452,7 @@ static int CDECL shim_pthread_create(HANDLE *thread, const void *attr, void *(*s
     HANDLE h = CreateThread(NULL, 0, win32_thread_proc, tb, 0, &tid);
     if (h) {
         register_thread(tid, h);
+        watchdog_register_thread(h, "pthread");
         *thread = h;
         return 0;
     }
@@ -454,11 +490,17 @@ static void CDECL shim_pthread_exit(void *retval) {
     ExitThread(0);
 }
 
+/* 0 = not run (PTHREAD_ONCE_INIT), 1 = running, 2 = done. Other threads
+ * wait until the routine has finished instead of racing past it. */
 static int CDECL shim_pthread_once(int *once_control, void (*init_routine)(void)) {
-    if (*once_control == 0) {
-        *once_control = 1;
+    volatile LONG *ctl = (volatile LONG *)once_control;
+    if (*ctl == 2) return 0;
+    if (InterlockedCompareExchange(ctl, 1, 0) == 0) {
         init_routine();
+        InterlockedExchange(ctl, 2);
+        return 0;
     }
+    while (*ctl != 2) Sleep(0);
     return 0;
 }
 
@@ -531,6 +573,10 @@ static int CDECL shim_poll(void *fds, unsigned long nfds, int timeout) { return 
 static int CDECL shim_writev(int fd, const void *iov, int iovcnt) { return -1; }
 
 void shims_init(void) {
+    /* 1 ms scheduler resolution so nanosleep and condition waits are not
+     * rounded up to the default 15.6 ms tick */
+    timeBeginPeriod(1);
+
     /* Initialize Bionic ctype tables */
     for (int i = 0; i < 256; i++) {
         unsigned char mask = 0;
@@ -554,7 +600,6 @@ void shims_init(void) {
     bionic_sF_[1] = stdout;
     bionic_sF_[2] = stderr;
     
-    init_mutex_map();
     init_thread_lock();
 }
 

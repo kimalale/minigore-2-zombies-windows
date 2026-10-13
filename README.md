@@ -63,6 +63,16 @@ or run `Minigore2_Windows.exe` directly.
 
 ---
 
+## Troubleshooting Freezes
+
+A watchdog thread monitors presented frames. If the game stops drawing for 6 seconds while the window is focused, it writes `hang_report.txt` (also printed to the console) with:
+- live host mutex / condition variable counts and the input queue depth
+- every game thread's registers and a stack scan symbolized against `libminigore2.so` (mangled C++ names; pipe through `c++filt` to demangle)
+
+Please attach `hang_report.txt` when reporting a freeze. A report can also appear during an unusually long level load; that is harmless.
+
+---
+
 ## Game Assets & Data
 - `assets/`: Game shaders, font atlases, models, textures, patterns, sounds, and speech files.
 - `lib/x86/`: Original compiled Android x86 ELF library (`libminigore2.so`).
