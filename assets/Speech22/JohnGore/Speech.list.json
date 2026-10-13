@@ -1,0 +1,353 @@
+{
+	"item":
+	{
+        "interval":[ 10.0, 20.0 ],		
+		"select":3,
+		"files":
+		{
+			"filenames":[ "Item01.ogg" ],
+			"filenames":[ "Item02.ogg" ],
+			"filenames":[ "Item04.ogg" ],
+			"filenames":[ "Item08.ogg" ],
+			"filenames":[ "ChristmasCameEarly01.ogg" ]
+		}
+	},
+	
+	"new record":
+	{
+		"select":1,
+		"files":
+		{
+			"filenames":[ "NewRecord01.ogg", "NewRecord03.ogg" ],
+			"filenames":[ "Brilliant01.ogg" ],
+			"filenames":[ "Great01.ogg", "Great02.ogg" ],
+			"filenames":[ "Super01.ogg", "Super02.ogg" ],
+			"filenames":[ "Unbelievable01.ogg" ],
+			"filenames":[ "Unbelievable02.ogg" ]
+		}
+	},
+	
+	"player damaged":
+	{
+        "interval":[ 6.0, 12.0 ],	
+		"select":5,
+		"files":
+		{
+			"filenames":[ "Gah01.ogg", "Gah02.ogg", "Gah03.ogg", "Gah04.ogg" ],
+			"filenames":[ "Gah05.ogg", "Gah06.ogg", "Gah07.ogg", "Gah08.ogg" ],
+			"filenames":[ "AlmostTookMyEar02.ogg" ],
+			"filenames":[ "ItPokedMeInTheEye01.ogg" ],
+			"filenames":[ "MyArm01.ogg", "MyArm02.ogg" ],
+			"filenames":[ "MyBack01.ogg", "MyBack03.ogg" ],
+			"filenames":[ "MyEar01.ogg", "MyEar02.ogg" ],
+			"filenames":[ "MyHead01.ogg", "MyHead02.ogg" ],
+			"filenames":[ "MyLeg01.ogg", "MyLeg02.ogg" ],
+			"filenames":[ "PlayerTakingDamage01.ogg", "PlayerTakingDamage02.ogg", "PlayerTakingDamage03.ogg", "PlayerTakingDamage04.ogg", "PlayerTakingDamage05.ogg", "PlayerTakingDamage06.ogg", "PlayerTakingDamage07.ogg" ]
+		}
+	},
+	
+	"beast":
+	{
+		"interval":[ "sound length" ],	
+		"select":4,
+		"files":
+		{
+			"filenames":[ "Beast01.ogg" ],
+			"filenames":[ "Beast02.ogg" ],
+			"filenames":[ "Beast03.ogg" ],
+			"filenames":[ "ImGrowing01.ogg" ],
+			"filenames":[ "MyHeaaad01.ogg", "MyHeaaad01.ogg" ],
+			"filenames":[ "JohnGorilla01.ogg", "JohnGorilla02.ogg" ]
+		}
+	},
+
+	"shotgun":
+	{
+        "interval":[ 10.0, 40.0 ],
+		"select":4,
+		"files":
+		{
+			"filenames":[ "Shotgun02.ogg", "Shotgun03.ogg", "Shotgun04.ogg" ],
+			"filenames":[ "EnoughToKill03.ogg" ],
+			"filenames":[ "Firepower01.ogg" ],
+			"filenames":[ "Guns03.ogg" ],
+			"filenames":[ "HotDamn01.ogg" ],
+			"filenames":[ "NotFlamethrower01.ogg" ],
+			"filenames":[ "PartyTime01.ogg" ],
+			"filenames":[ "TastedMyShotgun01.ogg", "TastedMyShotgun02.ogg" ],			
+			"filenames":[ "ThisIsBetter01.ogg" ],
+			"filenames":[ "Time2KickAss02.ogg" ],
+			"filenames":[ "XMasCameEarly02.ogg" ]
+		}
+	},
+	
+	"grenade launcher":
+	{
+        "interval":[ 10.0, 40.0 ],
+		"select":4,
+		"files":
+		{
+			"filenames":[ "GrenadeLauncher01.ogg", "GrenadeLauncher02.ogg" ],
+			"filenames":[ "Awesome01.ogg" ],
+			"filenames":[ "EnoughToKill03.ogg" ],
+			"filenames":[ "Firepower01.ogg" ],
+			"filenames":[ "Grenades01.ogg", "Grenades02.ogg" ],
+			"filenames":[ "Guns03.ogg" ],
+			"filenames":[ "HeavyArtillery01.ogg" ],
+			"filenames":[ "NotFlamethrower01.ogg" ],
+			"filenames":[ "This4Xmas01.ogg" ],
+			"filenames":[ "Time2KickAss03.ogg" ],
+			"filenames":[ "XMasCameEarly04.ogg" ]
+		}
+	},
+
+	"m60":
+	{
+        "interval":[ 20.0, 50.0 ],	
+		"select":3,
+		"files":
+		{
+			"filenames":[ "EnoughToKill03.ogg" ],
+			"filenames":[ "Firepower01.ogg" ],
+			"filenames":[ "HotDamn01.ogg" ],
+			"filenames":[ "ItsBulletFeedingTime01.ogg", "ItsBulletFeedingTime02.ogg" ],						
+			"filenames":[ "SayHelloToLittleFriend01.ogg", "SayHelloToLittleFriend02.ogg" ],
+			"filenames":[ "Time2KickAss02.ogg" ],
+			"filenames":[ "WhatTheDoctorOrdered01.ogg" ]
+		}
+	},
+	
+	"sheep launcher":
+	{
+        "interval":[ 20.0, 50.0 ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "IGuessItLaunches01.ogg", "IGuessItLaunches02.ogg" ],
+			"filenames":[ "SheepLauncher01.ogg" , "SheepLauncher02.ogg" ]
+		}
+	},
+	
+	"clover":
+	{
+        "interval":[ 20.0, 40.0 ],	
+		"select":3,
+		"files":
+		{
+			"filenames":[ "Goodie01.ogg" ],
+			"filenames":[ "MyFavourite01.ogg", "MyFavourite02.ogg" ],
+			"filenames":[ "UuGoodie01.ogg", "UuGoodie02.ogg" ]
+		}
+	},
+	
+	"ammo box":
+	{
+        "interval":[ 20.0, 50.0 ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "BoxFullOfJustice03.ogg" ],
+			"filenames":[ "Presents01.ogg", "Presents02.ogg" ],
+			"filenames":[ "WhereDidThisComeFrom04.ogg" ]
+		}
+	},
+	
+	"dual wielding":
+	{
+        "interval":[ 25.0, 40.0 ],
+		"select":4,
+		"files":
+		{
+			"filenames":[ "DualWielding01.ogg", "DualWielding02.ogg", "NiceDualWielding01.ogg"],
+			"filenames":[ "HandfulOfJustice02.ogg"],
+			"filenames":[ "MuchBetter01.ogg" ],
+			"filenames":[ "PartyTime02.ogg" ],
+			"filenames":[ "ThisIsGonnaBeFun01.ogg" ],
+			"filenames":[ "TwoBetterThanOne02.ogg", "TwoForPriceOfOne04.ogg" ]
+		}
+	},
+
+	"zombie":
+	{
+        "interval":[ 30.0, 60.0 ],
+		"select":26,
+		"files":
+		{
+			"filenames":[ "BeCareful01.ogg" ],
+			"filenames":[ "BraindeadBrute01.ogg", "BraindeadBrute02.ogg" ],
+			"filenames":[ "Cute01.ogg" ],		
+			"filenames":[ "DoesntLookGood01.ogg", "DoesntLookGood04.ogg" ],
+			"filenames":[ "ExpectUncle01.ogg", "ExpectUncle02.ogg" ],
+			"filenames":[ "GroupHug01.ogg", "GroupHug02.ogg", "GroupHug03.ogg" ],
+			"filenames":[ "ItStinks01.ogg", "ItStinks02.ogg" ],
+			"filenames":[ "Left4Dead01.ogg", "Left4Dead02.ogg" ],
+			"filenames":[ "LemmeGuessBrains01.ogg", "LemmeGuessBrains02.ogg", "LemmeGuessBrains03.ogg" ],
+			"filenames":[ "LooksEvil01.ogg", "LooksEvil02.ogg", "LooksEvil03.ogg" ],
+			"filenames":[ "MoreZombies01.ogg", "MoreZombies02.ogg" ],
+			"filenames":[ "NastyLookingZombie01.ogg", "NastyLookingZombie02.ogg", "NastyLookingZombie03.ogg", "NastyLookingZombie04.ogg" ],
+			"filenames":[ "NightOfTheLivingDead01.ogg", "NightOfTheLivingDead02.ogg", "NightOfTheLivingDead03.ogg", "NightOfTheLivingDead04.ogg" ],
+			"filenames":[ "NotGonnaCatchMe01.ogg", "NotGonnaCatchMe02.ogg" ],
+			"filenames":[ "OffWithYourHeads01.ogg", "OffWithYourHeads02.ogg" ],
+			"filenames":[ "RottenHands01.ogg", "RottenHands02.ogg", "RottenHands03.ogg" ],
+			"filenames":[ "ScaryWifeOnSunday01.ogg", "ScaryWifeOnSunday02.ogg" ],
+			"filenames":[ "TerribleStench01.ogg", "TerribleStench02.ogg", "TerribleStench03.ogg", "ThatStinks01.ogg" ],
+			"filenames":[ "TheHorror01.ogg", "TheHorror02.ogg", "TheHorror03.ogg", "TheHorror04.ogg" ],
+			"filenames":[ "TheHuntIsOn01.ogg" ],
+			"filenames":[ "TheseGuysAreSerious01.ogg", "TheseGuysLookSerious01.ogg", "TheseGuysLookSerious02.ogg", "TheseGuysLookSerious03.ogg", "TheseGuysMeanBusiness01.ogg", "TheseGuysMeanBusiness02.ogg", "TheseGuysMeanBusiness03.ogg" ],
+			"filenames":[ "TheyAreSurroundingMe01.ogg", "TheyAreSurroundingMe02.ogg", "TheyAreSurroundingMe03.ogg" ],
+			"filenames":[ "TheyMayBeWeak01.ogg" ],
+			"filenames":[ "TheyWantHug01.ogg", "TheyWantHug02.ogg" ],
+			"filenames":[ "ThingsAreRotten01.ogg", "ThingsAreRotten02.ogg", "ThingsAreRotten03.ogg" ],
+			"filenames":[ "ThisIsGoddamnZoo01.ogg", "ThisIsGoddamnZoo02.ogg", "ThisIsGoddamnZoo03.ogg" ],
+			"filenames":[ "Undead01.ogg", "Undead02.ogg", "Undead03.ogg" ],
+			"filenames":[ "WifeCanBeMoreScary01.ogg", "WifeCanBeMoreScary02.ogg" ],
+			"filenames":[ "WhatTheHeckIsThat01.ogg", "WhatTheHeckIsThat02.ogg", "WhatTheHeckIsThat03.ogg" ],
+			"filenames":[ "WonderIfRunOutOfBullets01.ogg", "WonderIfRunOutOfBullets02.ogg", "WonderIfRunOutOfBullets03.ogg" ],
+			"filenames":[ "ZombieApocalypse01.ogg", "ZombieApocalypse02.ogg", "ZombieApocalypse03.ogg" ],
+			"filenames":[ "Zombies01.ogg", "Zombies02.ogg" ]
+		}
+	},
+	
+	"blind zombie":
+	{
+        "interval":[ 50.0, 100.0 ],
+		"select":4,
+		"files":
+		{
+			"filenames":[ "AreTryingToSneakUpOnMe01.ogg", "AreTryingToSneakUpOnMe02.ogg" ],
+			"filenames":[ "IfItBleeds01.ogg", "IfItBleeds02.ogg", "IfItBleeds03.ogg" ],
+			"filenames":[ "NightOfTheLivingDead01.ogg", "NightOfTheLivingDead02.ogg", "NightOfTheLivingDead03.ogg", "NightOfTheLivingDead04.ogg" ],
+			"filenames":[ "StupidAndBlind01.ogg", "StupidAndBlind02.ogg", "StupidAndBlind03.ogg" ],
+			"filenames":[ "StupidZombie01.ogg", "StupidZombie02.ogg", "StupidZombie03.ogg" ]
+		}
+	},
+
+	"zombie killed":
+	{
+        "interval":[ 20.0, 30.0 ],	
+		"select":18,
+		"files":
+		{
+			"filenames":[ "AimBrainShortenPain01.ogg", "AimBrainShortenPain02.ogg", "AimBrainShortenPain03.ogg", "AimBrainShortenPain04.ogg" ],
+			"filenames":[ "Beautiful01.ogg" ],
+			"filenames":[ "BrainsNotOnMenu01.ogg", "BrainsNotOnMenu02.ogg", "BrainsNotOnMenu03.ogg" ],
+			"filenames":[ "DontPlayDead01.ogg" ],
+			"filenames":[ "DieYouBastard01.ogg" ],
+			"filenames":[ "Fantastic01.ogg", "Fantastic02.ogg" ],			
+			"filenames":[ "Goretastic01.ogg", "Goretastic02.ogg" ],
+			"filenames":[ "ICanSeeBrains01.ogg", "ICanSeeBrains02.ogg" ],
+			"filenames":[ "ILoveThis02.ogg" ],
+			"filenames":[ "Perfect02.ogg" ],
+			"filenames":[ "RotInHell01.ogg", "RotInHell02.ogg" ],
+			"filenames":[ "TakesCareOfThat01.ogg", "TookCareOfIt01.ogg", "TookCareOfIt02.ogg" ],
+			"filenames":[ "TenInRow01.ogg", "TenInRow02.ogg" ],
+			"filenames":[ "Wow01.ogg" ],
+			"filenames":[ "BackOff01.ogg" ],
+			"filenames":[ "Gotcha02.ogg" ],
+			"filenames":[ "IsThatAllYouveGot01.ogg" ],
+			"filenames":[ "NoEnd03.ogg" ],
+			"filenames":[ "OneHundredAlready02.ogg" ],
+			"filenames":[ "OutOfControl01.ogg" ],
+			"filenames":[ "PrettyGood01.ogg" ],
+			"filenames":[ "RightBetweenTheEyes02.ogg" ],
+			"filenames":[ "StayOffMyLeg01.ogg" ],
+			"filenames":[ "TheseThingsKeepComing03.ogg" ],
+			"filenames":[ "Yes02.ogg" ]
+		}
+	},
+		
+	"giant":
+	{
+        "interval":[ 50.0, 90.0 ],	
+		"select":5,
+		"files":
+		{
+			"filenames":[ "BigAsABear02.ogg" ],
+			"filenames":[ "KindaBig01.ogg" ],
+			"filenames":[ "LargeOne01.ogg" ],
+			"filenames":[ "ReallyBig01.ogg" ],
+			"filenames":[ "ThisLooksBad02.ogg" ],
+			"filenames":[ "UKiddingMe02.ogg" ],
+			"filenames":[ "WhereDidThatComeFrom02.ogg" ]
+		}
+	},
+	
+	"level boss":
+	{
+        "interval":[ 30.0, 50.0 ],		
+		"select":4,
+		"files":
+		{
+			"filenames":[ "MomSaidNoHugeMonsters01.ogg", "MomSaidNoHugeMonsters02.ogg" ],
+			"filenames":[ "NoWayNotFair01.ogg", "NoWayNotFair02.ogg", "NoWayNotFair03.ogg" ],
+			"filenames":[ "BigAsABear02.ogg" ],
+			"filenames":[ "KindaBig01.ogg" ],
+			"filenames":[ "LargeOne01.ogg" ],
+			"filenames":[ "BadFeeling02.ogg", "BadFeeling03.ogg", "BadFeeling04.ogg" ],
+			"filenames":[ "NeverSeenAnythingLikeThat02.ogg" ],
+			"filenames":[ "ReallyBig01.ogg" ],
+			"filenames":[ "DearLord01.ogg", "DearLord03.ogg" ],
+			"filenames":[ "DoesntLookGood01.ogg", "DoesntLookGood04.ogg" ],
+			"filenames":[ "ThisLooksBad02.ogg" ],
+			"filenames":[ "UglyTeeth01.ogg" ],
+			"filenames":[ "UKiddingMe02.ogg" ],
+			"filenames":[ "ThatIsEnormous01.ogg", "ThatIsEnormous02.ogg" ]
+		}
+	},
+	
+	"boss killed":
+	{
+        "interval":[ 50.0, 80.0 ],		
+		"select":3,
+		"files":
+		{
+			"filenames":[ "ILoveThis02.ogg" ],
+			"filenames":[ "TakesCareOfThat01.ogg", "TookCareOfIt01.ogg", "TookCareOfIt02.ogg" ],
+			"filenames":[ "Beautiful01.ogg" ],
+			"filenames":[ "Fantastic01.ogg", "Fantastic02.ogg" ],
+			"filenames":[ "Perfect02.ogg" ]
+		}
+	},
+	
+	"armed boss":
+	{
+        "interval":[ 100.0, 200.0 ],		
+		"select":2,
+		"files":
+		{
+			"filenames":[ "DamnHeCanPullTrigger01.ogg", "DamnHeCanPullTrigger02.ogg"  ],
+			"filenames":[ "TakesCareOfThat01.ogg" ]
+		}
+	},
+	
+	"another night":
+	{
+        "interval":[ 200.0, 500.0 ],		
+		"select":2,
+		"files":
+		{
+			"filenames":[ "GreatAnotherNight01.ogg", "GreatAnotherNight02.ogg", "GreatAnotherNight03.ogg", "GreatAnotherNight04.ogg" ],
+			"filenames":[ "HardlandNights01.ogg", "HardlandNights02.ogg", "HardlandNights03.ogg", "HardlandNights04.ogg" ]
+		}
+	},
+	
+	"cossack army":
+	{
+        "interval":[ 200.0, 400.0 ],		
+		"select":1,
+		"files":
+		{
+			"filenames":[ "UndeadCossackArmy01.ogg", "UndeadCossackArmy02.ogg", "UndeadCossackArmy03.ogg" ]
+		}
+	},
+	
+	"zombie diggers":
+	{
+        "interval":[ 400.0, 700.0 ],		
+		"select":1,
+		"files":
+		{
+			"filenames":[ "WhatsThatNoise01.ogg", "WhatsThatNoise03.ogg" ]
+		}
+	}
+}

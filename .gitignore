@@ -1,0 +1,7 @@
+# Runtime files and saves
+saves/
+*.log
+*.txt
+
+# Original package
+*.apk

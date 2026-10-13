@@ -1,0 +1,1604 @@
+{
+"comment":{"text":"//--------------// RANGED WEAPONS //--------------// "},
+
+	"bullet hits wall":
+	{
+		"interval":[ 0.03 ],
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/BulletHitsWall_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/BulletHitsWall_02.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/BulletHitsWall_03.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/BulletHitsWall_04.ogg" ]
+		},
+		"priority":"LOW"
+
+	},
+
+	"shooting ends":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/ShootingEnd_03.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"shotgun":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Shotgun_04.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"shotgun load":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Shotgun_Load.ogg" ]			
+		},
+		"priority":"HIGH"
+	},
+
+	"grenade launcher":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Grenade_Launch_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"grenade load":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Grenade_Launch_Load.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"grenade explosion":
+	{
+		"interval":[ 0.03 ],	
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Grenade_Explode_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"sheep launcher":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Sheep_Launch_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Sheep_Launch_02.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Sheep_Launch_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"sheep load":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Sheep_Load.ogg" ]			
+		},
+		"priority":"HIGH"
+	},
+
+	"sheep explosion":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Sheep_Explode_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Sheep_Explode_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+		
+	"cossack bomb":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Cossack_Bomb_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Cossack_Bomb_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"cossack bomb fuse":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Cossack_Bomb_Fuse_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"cossack bomb kick":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Cossack_Bomb_Kick_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"machine gun single shot":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_MG_Single_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_MG_Single_02.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_MG_Single_03.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_MG_Single_04.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_MG_Single_05.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"m60 single shot":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_SingleShot_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_SingleShot_02.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_SingleShot_03.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_SingleShot_04.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_SingleShot_05.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"m60 loop":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_Loop.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"m60 last":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_M60_Last.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"minigun single shot":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Minigun_SingleShot_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Minigun_SingleShot_02.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Minigun_SingleShot_03.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Minigun_SingleShot_04.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"minigun loop":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Minigun_Loop.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"minigun last":
+	{
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Weapon_Minigun_Last.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"fireball":
+	{
+		"interval":[ 0.03 ],
+		"files":
+		{
+			"filenames":[ "/RangedWeapon_SFX/Fireball_01.ogg" ],
+			"filenames":[ "/RangedWeapon_SFX/Fireball_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+"comment":{"text":"//--------------// MELEE WEAPONS //--------------//"},
+
+	"weapon swosh":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/WeaponSwosh_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/WeaponSwosh_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/WeaponSwosh_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"weapon clang":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/WeaponClang_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/WeaponClang_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/WeaponClang_03.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"weapon hitting bush":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Bush_Whoosh_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Bush_Whoosh_03.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Bush_Whoosh_04.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"weapon hitting ice":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Ice_SliceHard_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Ice_SliceHard_03.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Ice_SliceHard_04.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"weapon hitting meat":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Meat_SliceSoftLarge_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Meat_SliceSoftLarge_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Meat_SliceSoftLarge_03.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"weapon hitting stone":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Stone_SliceBlockHelmet_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Stone_SliceBlockHelmet_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Stone_SliceBlockHelmet_03.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"weapon hitting wood":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Wood_SliceWoodHit_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Wood_SliceWoodHit_03.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Wood_SliceWoodHit_04.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"axe":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Axe_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Axe_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Axe_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"lumberjack axe":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/LumberjackAxe_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/LumberjackAxe_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/LumberjackAxe_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"chainsaw":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_03.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_04.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	
+	"chainsaw loop":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_Loop_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"chainsaw blood":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_Splat_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_Splat_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Chainsaw_Splat_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"hammer":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Hammer_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Hammer_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Hammer_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"sword":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Sword_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Sword_02.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Sword_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"jump attack":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/JumpAttack_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"jump landing":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/JumpLanding_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"scythe":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Scythe_01.ogg" ],
+			"filenames":[ "/MeleeWeapon_SFX/Scythe_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+
+
+"comment":{"text":"//--------------// PICKUPS //--------------//"},
+	
+	"item drop":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/ItemDrop_01.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"item pickup":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/HeroGetItem.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"clover pickup":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/HeroGetClover.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	
+	"ammo box explosion":
+	{
+		"interval":[ 0.10 ],		
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/BoxExplosion_02.ogg" ],
+			"filenames":[ "/Pickup_SFX/BoxExplosion_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"melee pickup":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/HeroGetMeleeWeapon_01.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"coin":
+	{
+		"interval":[ 0.05 ],
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/Coin.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"chest":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/OpenChest.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"large chest":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/ChestBig_Reward_01.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"health pickup":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/HealthPickup_01.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"comment":{"text":"//--------------// PLAYER CHARACTER //--------------//"},
+	
+
+
+	"character footstep":
+	{
+		"select":6,
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_01.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_02.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_03.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_04.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+	"character footstep snow":
+	{
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_Snow_01.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_Snow_02.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_Snow_03.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_Snow_04.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/HeroFootstep_Snow_05.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"character taking damage":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/HeroTakingDamage.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"character loses heart":
+	{
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/HeroLoseHeart.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"character death":
+	{
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/HeroDeath.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"penguin":
+	{
+		"interval":[ 3.0, 10.0 ],		
+		"select":3,
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/Penguin_01.ogg",
+						"/PlayerCharacter_SFX/Penguin_02.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/Penguin_03.ogg",
+						"/PlayerCharacter_SFX/Penguin_04.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/Penguin_05.ogg",
+						"/PlayerCharacter_SFX/Penguin_06.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/Penguin_07.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"penguin death":
+	{
+		"interval":[ 3.0, 10.0 ],	
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/PenguinDeath_01.ogg",
+						"/PlayerCharacter_SFX/PenguinDeath_02.ogg",
+						"/PlayerCharacter_SFX/PenguinDeath_03.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"emperor penguin":
+	{
+		"interval":[ 3.0, 10.0 ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/EmperorPenguin_01.ogg",
+						"/PlayerCharacter_SFX/EmperorPenguin_02.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/EmperorPenguin_03.ogg",
+						"/PlayerCharacter_SFX/EmperorPenguin_04.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/EmperorPenguin_05.ogg",
+						"/PlayerCharacter_SFX/EmperorPenguin_06.ogg" ],
+			"filenames":[ "/PlayerCharacter_SFX/EmperorPenguin_07.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"emperor penguin death":
+	{
+		"interval":[ 3.0, 10.0 ],		
+		"select":1,
+		"files":
+		{
+			"filenames":[ "/PlayerCharacter_SFX/EmperorPenguinDeath_01.ogg",
+						"/PlayerCharacter_SFX/EmperorPenguinDeath_02.ogg",
+						"/PlayerCharacter_SFX/EmperorPenguinDeath_03.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+"comment":{"text":"//--------------// BEAST //--------------//"},
+
+	"beast eating":
+	{
+		"files":
+		{
+			"filenames":[ "/Beast_SFX/Eating_01.ogg" ],
+			"filenames":[ "/Beast_SFX/Eating_02.ogg" ],
+			"filenames":[ "/Beast_SFX/Eating_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"beast footstep":
+	{
+		"select":2,
+		"files":
+		{
+			"filenames":[ "/Beast_SFX/Beast_Fire_Footstep_01.ogg" ],
+			"filenames":[ "/Beast_SFX/Beast_Fire_Footstep_02.ogg" ],
+			"filenames":[ "/Beast_SFX/Beast_Fire_Footstep_03.ogg" ],
+			"filenames":[ "/Beast_SFX/Beast_Fire_Footstep_04.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+
+	"beast igniting":
+	{
+		"files":
+		{
+			"filenames":[ "/Beast_SFX/FlameLight.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"beast burning":
+	{
+		"files":
+		{
+			"filenames":[ "/Beast_SFX/Beast_Burning_01.ogg" ],
+			"filenames":[ "/Beast_SFX/FireBassPower.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+"comment":{"text":"//--------------// ENVIRONMENT //--------------//"},
+	
+	"level up":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/LevelUp_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"challenge complete":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/Challenge_Complete_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"evil voice":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/DarknessLitUp.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"rain":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/Rain.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"shop":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/ShopIn_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"thunder":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/Thunder_01.ogg" ],
+			"filenames":[ "/Environment_SFX/Thunder_02.ogg" ],
+			"filenames":[ "/Environment_SFX/Thunder_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"countdown":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/Countdown_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"light ray":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/LightRay_01.ogg" ],
+			"filenames":[ "/Environment_SFX/LightRay_02.ogg" ],
+			"filenames":[ "/Environment_SFX/LightRay_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"zombie bell":
+	{
+		"files":
+		{
+			"filenames":[ "/Environment_SFX/ZombieBell.ogg" ]
+		},
+		"priority":"MEDIUM"
+	},
+	
+"comment":{"text":"//--------------// FURRIES //--------------//"},
+		
+	"furry small":
+	{
+		"interval":[ 0.1, 2.0 ],
+		"files":
+		{
+			"filenames":[ "/Furry_SFX/Furry_Small_01.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Small_02.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Small_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"furry medium":
+	{
+		"interval":[ 0.1, 2.0 ],
+		"files":
+		{
+			"filenames":[ "/Furry_SFX/Furry_Medium_01.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Medium_02.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Medium_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"furry large":
+	{
+		"interval":[ 0.1, 2.0 ],
+		"files":
+		{
+			"filenames":[ "/Furry_SFX/Furry_Large_01.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Large_02.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Large_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"furry death":
+	{
+		"interval":[ 0.1, 2.0 ],
+		"files":
+		{
+			"filenames":[ "/Furry_SFX/Furry_Death_01.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Death_02.ogg" ],
+			"filenames":[ "/Furry_SFX/Furry_Death_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+		
+"comment":{"text":"//--------------// ZOMBIES //--------------//"},
+		
+	"zombie mass":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/ZombieGroupBig_01.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"zombie attack":
+	{
+		"interval":[ 0.1, 2.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/ZombieAttack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieAttack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieAttack_03.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieAttack_04.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"zombie popping out from ground":
+	{
+		"interval":[ 8.0, 12.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Zombie_Pop_Out_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Zombie_Pop_Out_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Zombie_Pop_Out_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"zombie entrance":
+	{
+		"interval":[ 10.0, 16.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/ZombieBigGroup_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieBigGroup_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieBigGroup_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"zombie digging ground":
+	{
+		"interval":[ 16.0, 24.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Zombie_Dig_Group_01.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"zombie damage":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_03.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_04.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_05.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_06.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_07.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Splat_08.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"zombie head kick":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Zombie_Head_Kick_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Zombie_Head_Kick_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+
+	"alligator attack":
+	{
+		"interval":[ 3.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Alligator_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Alligator_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"alligator death":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Alligator_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Alligator_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"bunny small attack":
+	{
+		"interval":[ "sound lenght" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Bunny_Small_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Bunny_Small_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"bunny death":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Bunny_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Bunny_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"bunny giant attack":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Bunny_Giant_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Bunny_Giant_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"bunny giant death":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Bunny_Giant_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Bunny_Giant_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+		
+	"moose attack":
+	{
+		"interval":[ 3.5, 6.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Moose_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Moose_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"moose death":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Moose_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Moose_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"chef guard attack":
+	{
+		"interval":[ 4.0, 7.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Chef_Guard_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Guard_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Guard_Attack_03.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"chef guard death":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Chef_Guard_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Guard_Death_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Guard_Death_03.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"chef giant attack":
+	{
+		"interval":[ 3.5, 5.0 ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Chef_Giant_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Giant_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Giant_Attack_03.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"chef giant death":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Chef_Giant_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Chef_Giant_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"cossack guard attack":
+	{
+		"interval":[ 9.0, 25.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Attack_03.ogg" ],
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Attack_04.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"cossack guard death":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Death_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Cossack_Guard_Death_03.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"cossack giant attack":
+	{
+		"interval":[ 5.0, 7.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Cossack_Giant_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Cossack_Giant_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"cossack giant death":
+	{
+		"interval":[ "sound length" ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Cossack_Giant_Death_01.ogg"],
+			"filenames":[ "/Zombie_SFX/Cossack_Giant_Death_02.ogg"]
+		},
+		"priority":"LOW"	
+	},
+	
+	"evil guard attack":
+	{
+		"interval":[ 2.6, 4.0 ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/EvilGuard_Voice_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/EvilGuard_Voice_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/EvilGuard_Voice_03.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"evil guard death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/EvilGuard_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/EvilGuard_Death_02.ogg" ],			
+			"filenames":[ "/Zombie_SFX/EvilGuard_Death_03.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+		
+	"lumberjack guard attack":
+	{
+		"interval":[ 4.6 ],		
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Lumberjack_Guard_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Lumberjack_Guard_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"lumberjack guard death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Lumberjack_Guard_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Lumberjack_Guard_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"lumberjack giant attack":
+	{
+		"interval":[ 5.8 ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Lumberjack_Giant_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Lumberjack_Giant_Attack_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"lumberjack giant death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Lumberjack_Giant_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Lumberjack_Giant_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+
+	"pork druid attack":
+	{
+		"interval":[ 2.5 ],	
+		"select":4,
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Pork_Druid_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Druid_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Druid_Idle_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Druid_Idle_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Druid_Idle_03.ogg" ]		
+		},
+		"priority":"MEDIUM"
+	},	
+	
+	"pork guard attack":
+	{
+		"interval":[ 6.0 ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Pork_Guard_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Guard_Death_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Guard_Death_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"pork guard death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Pork_Guard_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Guard_Death_02.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"pork giant attack":
+	{
+		"interval":[ 6.0 ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Pork_Giant_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Giant_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Giant_Attack_03.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Giant_Attack_04.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"pork giant death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Pork_Giant_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Pork_Giant_Death_02.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"sheep death":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/SheepSmall_Death_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/SheepSmall_Death_02.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+	
+	"zombie death":
+	{
+		"interval":[ 1.0, 2.0 ],	
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_03.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_04.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_05.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_06.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_07.ogg" ],
+			"filenames":[ "/Zombie_SFX/ZombieDamage_Voice_08.ogg" ]
+		},
+		"priority":"LOW"	
+	},
+
+	"vulture attack":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Zombie_SFX/Vulture_Attack_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Vulture_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Vulture_Attack_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Vulture_Idle_01.ogg" ],
+			"filenames":[ "/Zombie_SFX/Vulture_Idle_02.ogg" ],
+			"filenames":[ "/Zombie_SFX/Vulture_Idle_03.ogg" ]						
+		},
+		"priority":"LOW"	
+	},
+	
+	
+	
+"comment":{"text":"//--------------// BOSSES //--------------//"},
+
+	"boss fall":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Boss_Fall_01.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"cossack general voice":
+	{
+		"interval":[ 2.0, 5.0 ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/CossackGeneral_Attack_01.ogg" ],
+			"filenames":[ "/Boss_SFX/CossackGeneral_Attack_02.ogg" ],
+			"filenames":[ "/Boss_SFX/CossackGeneral_Attack_03.ogg" ],		
+			"filenames":[ "/Boss_SFX/CossackGeneral_Voice_01.ogg" ],
+			"filenames":[ "/Boss_SFX/CossackGeneral_Voice_02.ogg" ],
+			"filenames":[ "/Boss_SFX/CossackGeneral_Voice_03.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"cossack general death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/CossackGeneral_Death_01.ogg" ],
+			"filenames":[ "/Boss_SFX/CossackGeneral_Death_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"domovoi voice":
+	{
+		"interval":[ 2.0, 5.0 ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Domovoi_Voice_01.ogg" ],
+			"filenames":[ "/Boss_SFX/Domovoi_Voice_02.ogg" ],
+			"filenames":[ "/Boss_SFX/Domovoi_Voice_03.ogg" ],
+			"filenames":[ "/Boss_SFX/Domovoi_Voice_04.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"domovoi death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Domovoi_Death_01.ogg" ],
+			"filenames":[ "/Boss_SFX/Domovoi_Death_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"metusalem voice":
+	{
+		"interval":[ 4.0, 15.0 ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Metusalem_Voice_01.ogg" ],
+			"filenames":[ "/Boss_SFX/Metusalem_Voice_02.ogg" ],
+			"filenames":[ "/Boss_SFX/Metusalem_Voice_03.ogg" ],
+			"filenames":[ "/Boss_SFX/Metusalem_Voice_04.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"metusalem death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Metusalem_Death_01.ogg" ],
+			"filenames":[ "/Boss_SFX/Metusalem_Death_02.ogg" ],
+			"filenames":[ "/Boss_SFX/Metusalem_Death_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"metusalem drink":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Metusalem_Drink_01.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"metusalem liquid":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Metusalem_Liquid_01.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"monstrosity cage hit":
+	{
+		"interval":[ "sound length" ],
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Monstrosity_Cage_Hit.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"monstrosity voice":
+	{
+		"interval":[ 4.0, 20.0 ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Monstrosity_Voice_01.ogg",
+						"/Boss_SFX/Monstrosity_Voice_02.ogg" ],
+			"filenames":[ "/Boss_SFX/Monstrosity_Voice_03.ogg",
+						"/Boss_SFX/Monstrosity_Voice_04.ogg" ]
+		},
+		"priority":"LOW"
+	},
+
+	"monstrosity death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Monstrosity_Death_01.ogg",
+						"/Boss_SFX/Monstrosity_Death_02.ogg",
+						"/Boss_SFX/Monstrosity_Death_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"grim reaper voice":
+	{
+		"interval":[ 5.0, 10.0 ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/GrimReaper_Voice_01.ogg" ],
+			"filenames":[ "/Boss_SFX/GrimReaper_Voice_02.ogg" ],
+			"filenames":[ "/Boss_SFX/GrimReaper_Voice_04.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"grim reaper entry":
+	{
+		"interval":[ "sound length" ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/GrimReaper_Walk_01.ogg" ],
+			"filenames":[ "/Boss_SFX/GrimReaper_Walk_02.ogg" ],
+			"filenames":[ "/Boss_SFX/GrimReaper_Walk_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"grim reaper death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/GrimReaper_Death_01.ogg",
+						"/Boss_SFX/GrimReaper_Death_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"dead jester voice":
+	{
+		"interval":[ 2.0, 5.0 ],
+		"select":2,		
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/DeadJester_Voice_01.ogg",
+						"/Boss_SFX/DeadJester_Voice_02.ogg" ],
+			"filenames":[ "/Boss_SFX/DeadJester_Voice_03.ogg",
+						"/Boss_SFX/DeadJester_Voice_04.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"dead jester death":
+	{
+		"interval":[ "sound length" ],
+		"select":1,		
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/DeadJester_Death_01.ogg" ],
+			"filenames":[ "/Boss_SFX/DeadJester_Death_02.ogg" ],
+			"filenames":[ "/Boss_SFX/DeadJester_Death_03.ogg" ],
+			"filenames":[ "/Boss_SFX/DeadJester_Death_04.ogg" ]			
+		},
+		"priority":"HIGH"
+	},
+	
+	"zombie santa voice":
+	{
+		"interval":[ 2.0, 5.0 ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/ZombieSanta_Voice_01.ogg" ],
+			"filenames":[ "/Boss_SFX/ZombieSanta_Voice_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"zombie santa death":
+	{
+		"interval":[ "sound length" ],	
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/ZombieSanta_Death_01.ogg" ],
+			"filenames":[ "/Boss_SFX/ZombieSanta_Death_02.ogg" ],
+			"filenames":[ "/Boss_SFX/ZombieSanta_Death_03.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"boss footstep":
+	{
+		"files":
+		{
+			"filenames":[ "/Boss_SFX/Fs_Boss_01.ogg" ],
+			"filenames":[ "/Boss_SFX/Fs_Boss_02.ogg" ],
+			"filenames":[ "/Boss_SFX/Fs_Boss_03.ogg" ],
+			"filenames":[ "/Boss_SFX/Fs_Boss_04.ogg" ],
+			"filenames":[ "/Boss_SFX/Fs_Boss_05.ogg" ]
+		},
+		"priority":"LOW"
+	},
+	
+	"mega loot hit ground":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Hammer_02.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"mega loot touched":
+	{
+		"files":
+		{
+			"filenames":[ "/MeleeWeapon_SFX/Stone_SliceBlockHelmet_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"mega loot touched voice":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/MegaLoot.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"mega loot disappear":
+	{
+		"files":
+		{
+			"filenames":[ "/Pickup_SFX/MegaLoot_Disappear.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+"comment":{"text":"//--------------// MENUS //--------------//"},
+
+	"menu button":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Button.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"menu play":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Play.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"menu options":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Options.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+
+	"menu credits":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Credits.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"menu unlock":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Unlock_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"menu upgrade":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Unlock_01.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"menu gold falling":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Gold.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"menu challenge complete":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Menu_Challenge_Complete.ogg" ]
+		},
+		"priority":"HIGH"
+	},
+	
+	"shop deny":
+	{
+		"files":
+		{
+			"filenames":[ "/Menu_SFX/Shop_Deny.ogg" ]
+		},
+		"priority":"HIGH"
+	}
+}

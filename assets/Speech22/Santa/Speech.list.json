@@ -1,0 +1,124 @@
+{
+	"zombie killed":
+	{
+		"interval":[ 15.0, 50.0 ],	
+		"select":14,
+		"files":
+		{
+			"filenames":[ "BeBeBeBe01.ogg" ],
+			"filenames":[ "FatherChristmas02.ogg" ],
+			"filenames":[ "Haha02.ogg", "Haha03.ogg", "Haha04.ogg", "Haha05.ogg" ],
+			"filenames":[ "HungryForGnomes02.ogg" ],
+			"filenames":[ "NastyCritters02.ogg" ],
+			"filenames":[ "SantaIsHappy01.ogg" ],
+			"filenames":[ "Yem01.ogg" ],
+			"filenames":[ "YoHoHo01.ogg" ],
+			"filenames":[ "BiteHarderThanGnomes01.ogg" ],
+			"filenames":[ "ComeHereSoSantaCanEatYou02.ogg" ],
+			"filenames":[ "EvenGnomesArentThatFurry02.ogg" ],
+			"filenames":[ "FatMaggot02.ogg" ],
+			"filenames":[ "HowYouDoing01.ogg" ],
+			"filenames":[ "MyFatProtectsMe01.ogg" ],
+			"filenames":[ "NoBigDeal01.ogg" ],
+			"filenames":[ "SantaHatesWinter01.ogg" ]
+		}
+	},
+
+	"new record":
+	{
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Death01.ogg", "Death02.ogg", "Death03.ogg", "Death04.ogg" ],
+			"filenames":[ "DeathPartyIsOver01.ogg" ]
+		}
+	},
+	
+	"player damaged":
+	{
+		"interval":[ 8.0, 25.0 ],	
+		"select":6,
+		"files":
+		{
+			"filenames":[ "DamnMyBelly04.ogg" ],
+			"filenames":[ "ItHitMyBelly01.ogg" ],
+			"filenames":[ "Ouch01.ogg" ],
+			"filenames":[ "Ouch02.ogg" ],
+			"filenames":[ "Ouch03.ogg" ],			
+			"filenames":[ "Ouch04.ogg", "Ouch05.ogg" ]
+		}
+	},
+	
+	"beast":
+	{
+		"select":5,
+		"files":
+		{
+			"filenames":[ "Beast01.ogg", "Beast02.ogg" ],
+			"filenames":[ "BeastCake01.ogg" ],
+			"filenames":[ "BeastEatYouAll02.ogg" ],
+			"filenames":[ "BeastXmasIsOver01.ogg" ],
+			"filenames":[ "HoHoHangover01.ogg" ]
+		}
+	},
+	
+	"shotgun":
+	{
+		"interval":[ 10.0, 40.0 ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Shotgun01.ogg" ],
+			"filenames":[ "Shotgun02.ogg" ]
+		}
+	},
+	
+	"grenade launcher":
+	{
+        "interval":[ 15.0, 50.0 ],
+		"select":2,
+		"files":
+		{
+			"filenames":[ "GrenadeLauncher01.ogg" ],
+			"filenames":[ "GrenadeLauncher03.ogg" ]
+		}
+	},
+	
+	"clover":
+	{
+		"interval":[ 15.0, 60.0 ],	
+		"select":4,
+		"files":
+		{
+			"filenames":[ "Clovers01.ogg", "Clovers02.ogg", "Clovers03.ogg" ],
+			"filenames":[ "JustLoveClovers01.ogg" ],
+			"filenames":[ "SantaEatsLikeBears01.ogg" ],
+			"filenames":[ "SantaHungry02.ogg" ]
+		}
+	},
+	
+	"ammo box":
+	{
+		"interval":[ 25.0, 40.0 ],	
+		"select":5,
+		"files":
+		{
+			"filenames":[ "Ammobox05.ogg" ],
+			"filenames":[ "CouldItBeCakeInThatBox01.ogg" ],
+			"filenames":[ "MyPresents01.ogg" ],
+			"filenames":[ "PresentForSanta01.ogg" ],
+			"filenames":[ "StayAwayFromBoxFurryKids02.ogg" ],
+			"filenames":[ "WhereIsTheCake02.ogg" ]
+		}
+	},
+	
+	"dual wielding":
+	{
+		"interval":[ 20.0, 60.0 ],	
+		"select":1,
+		"files":
+		{
+			"filenames":[ "DualWielding02.ogg" ]
+		}
+	}
+}

@@ -1,0 +1,129 @@
+{	
+	"new record":
+	{
+		"select":1,
+		"files":
+		{
+			"filenames":[ "ComingForYouHilda01.ogg" ],
+			"filenames":[ "StillKicking01.ogg" ],
+			"filenames":[ "Death03.ogg" ],
+			"filenames":[ "Dying02.ogg", "Dying04.ogg" ],
+			"filenames":[ "RestInOnePiece02.ogg" ],
+			"filenames":[ "YouWereSupposedToDieOnce02.ogg" ]
+		}
+	},
+	
+	"player damaged":
+	{
+		"interval":[ 1.0, 8.0 ],		
+		"select":8,
+		"files":
+		{
+			"filenames":[ "AiAiAi01.ogg" ],
+			"filenames":[ "BrokeMyArm03.ogg" ],
+			"filenames":[ "BrokeMyGlasses01.ogg" ],
+			"filenames":[ "Eek02.ogg" ],
+			"filenames":[ "Gah01.ogg" ],
+			"filenames":[ "Gah02.ogg" ],			
+			"filenames":[ "HaveBeenShotWorse02.ogg" ],			
+			"filenames":[ "LostMeFeetInTheWar02.ogg" ],
+			"filenames":[ "MyBonesAreWeak03.ogg" ],
+			"filenames":[ "MyTooth05.ogg" ],
+			"filenames":[ "Ouch02.ogg" ],
+			"filenames":[ "Ugh07.ogg", "Ugh08.ogg", "Ugh09.ogg" ]
+		}
+	},
+	
+	"beast":
+	{
+		"files":
+		{
+			"filenames":[ "UncleJerry01.ogg" ]
+		}
+	},
+	
+	"shotgun":
+	{
+        "interval":[ 10.0, 24.0 ],
+		"select":3,
+		"files":
+		{
+			"filenames":[ "LovelyShotgun02.ogg" ],
+			"filenames":[ "Shotgun02.ogg" ]
+		}
+	},
+	
+	"grenade launcher":
+	{
+        "interval":[ 10.0, 24.0 ],
+		"select":2,
+		"files":
+		{
+			"filenames":[ "GrenadeLauncher01.ogg", "GrenadeLauncher02.ogg" ],
+			"filenames":[ "HaveNotSeenTheseSinceWar01.ogg" ]
+		}
+	},
+	
+	"clover":
+	{
+		"interval":[ 4.0, 12.0 ],		
+		"select":3,
+		"files":
+		{
+			"filenames":[ "Finally02.ogg" ],
+			"filenames":[ "Goodies01.ogg", "Goodies02.ogg" ],
+			"filenames":[ "Medicine02.ogg", "Medicine04.ogg", "Medicine05.ogg" ]
+		}
+	},
+	
+	"ammo box":
+	{
+		"interval":[ 14.0, 36.0 ],		
+		"select":4,
+		"files":
+		{
+			"filenames":[ "FunnyLittleBox01.ogg" ],
+			"filenames":[ "MyLuggage02.ogg" ],
+			"filenames":[ "NeedBiggerGuns01.ogg" ],
+			"filenames":[ "PickItUpOrShootIt05.ogg" ]
+		}
+	},
+	
+	"dual wielding":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":1,
+		"files":
+		{
+			"filenames":[ "DualWielding01.ogg" ]
+		}
+	},
+
+	"zombie":
+	{
+		"interval":[ 24.0, 60.0 ],		
+		"select":18,
+		"files":
+		{
+			"filenames":[ "AfterlifeBeginsAtEighty01.ogg" ],
+			"filenames":[ "DontRememberThisForest02.ogg" ],
+			"filenames":[ "GetOffMyLawn01.ogg" ],
+			"filenames":[ "Hihihi01.ogg", "Hihihi02.ogg", "Hihihi07.ogg" ],
+			"filenames":[ "JerryIsMyName03.ogg" ],
+			"filenames":[ "WhatIsNextTeddyBears02.ogg" ],
+			"filenames":[ "WhatIsThisPlace01.ogg" ],
+			"filenames":[ "YoungBuck01.ogg" ],
+			"filenames":[ "GonnaHaveHeartAttack01.ogg" ],
+			"filenames":[ "HugeFurryBeastInMyRoom01.ogg" ],
+			"filenames":[ "IfAnyoneEatsMePleaseThatOne01.ogg" ],
+			"filenames":[ "ItHasBigNastyTeeth02.ogg" ],
+			"filenames":[ "ItIsLikeBigFurryTank02.ogg", "LikeTankWithFur04.ogg" ],
+			"filenames":[ "LittleJohnUsedToHuntBears01.ogg" ],
+			"filenames":[ "LookAtThoseTeeth01.ogg" ],
+			"filenames":[ "MightyBeast01.ogg" ],
+			"filenames":[ "Nurse01.ogg" ],
+			"filenames":[ "ThatIsWhatJerryCallsMonster02.ogg" ],
+			"filenames":[ "WhatLargeAnimal03.ogg" ]
+		}
+	}
+}

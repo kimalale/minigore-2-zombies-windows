@@ -1,0 +1,84 @@
+{
+	"item":
+	{
+		"interval":[ 5.0, 10.0 ],	
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	},
+
+	"new record":
+	{
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	},
+	
+	"player damaged":
+	{
+		"interval":[ 5.0, 10.0 ],
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	},
+	
+	"beast":
+	{
+		"interval":[ 5.0, 10.0 ],
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	},
+	
+	"shotgun":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	},
+	
+	"grenade launcher":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	},
+	
+	"dual wielding":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":3,
+		"files":
+		{
+			"filenames":[ "Roar01.ogg" ],
+			"filenames":[ "Roar02.ogg" ],
+			"filenames":[ "Roar03.ogg" ]
+		}
+	}
+}

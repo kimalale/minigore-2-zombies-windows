@@ -1,0 +1,73 @@
+{
+	"item":
+	{
+		"interval":[ 3.0, 4.0 ],		
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Interested01.ogg" ]
+		}
+	},
+	
+	"new record":
+	{
+		"select":1,
+		"files":
+		{
+			"filenames":[ "Annoyed01.ogg" ],
+			"filenames":[ "Worried01.ogg" ],
+			"filenames":[ "GoingMad01.ogg" ]
+		}
+	},
+	
+	"player damaged":
+	{
+		"interval":[ 3.0, 4.0 ],		
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Worried01.ogg" ],
+			"filenames":[ "GoingMad01.ogg" ]
+		}
+	},
+	
+	"beast":
+	{
+		"interval":[ 3.0, 5.0 ],		
+		"select":2,
+		"files":
+		{
+			"filenames":[ "Beast01.ogg" ]
+		}
+	},
+	
+	"shotgun":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":1,
+		"files":
+		{
+			"filenames":[ "Interested01.ogg" ]
+		}
+	},
+	
+	"grenade launcher":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":1,
+		"files":
+		{
+			"filenames":[ "Interested01.ogg" ]
+		}
+	},
+	
+	"dual wielding":
+	{
+        "interval":[ 10.0, 30.0 ],
+		"select":1,
+		"files":
+		{
+			"filenames":[ "Interested01.ogg" ]
+		}
+	}
+}

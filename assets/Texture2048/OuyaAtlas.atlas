@@ -1,0 +1,17 @@
+atlas name=OuyaAtlas w=1024 h=1024 texeloffset=0.000000
+  name=Tutorial_Ouya_L1                     x=242  y=514  w=132  h=92
+  name=Tutorial_Ouya_R1                     x=826  y=498  w=134  h=92
+  name=Tutorial_Ouya_ButtonY                x=2    y=482  w=116  h=120
+  name=Tutorial_Ouya_ButtonU                x=706  y=426  w=116  h=120
+  name=Tutorial_Ouya_ButtonO                x=586  y=426  w=116  h=120
+  name=Tutorial_Ouya_ButtonA                x=826  y=370  w=116  h=120
+  name=Tutorial_Ouya_ButtonSystem           x=386  y=346  w=131  h=160
+  name=Tutorial_Ouya_DPad                   x=242  y=346  w=140  h=160
+  name=AdButtonPlay_2x                      x=586  y=242  w=156  h=173
+  name=AdContinueBox                        x=242  y=242  w=336  h=96
+  name=Tutorial_Ouya_RightStick             x=826  y=186  w=180  h=180
+  name=Tutorial_Ouya_LeftStick              x=826  y=2    w=180  h=180
+  name=Ad_Icon_KingHunt_2x                  x=2    y=242  w=232  h=232
+  name=Ad_Icon_IceRage_2x                   x=586  y=2    w=232  h=232
+  name=Ad_Icon_BikeBaron_2x                 x=346  y=2    w=232  h=232
+  name=Tutorial_Ouya_Controller             x=2    y=2    w=336  h=229
