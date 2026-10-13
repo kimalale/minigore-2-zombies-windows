@@ -194,7 +194,19 @@ void log_init(const char *path) {
     HANDLE pipe_write = NULL;
     if (!CreatePipe(&g_pipe_read, &pipe_write, NULL, PIPE_BYTES)) return;
 
-    g_console = GetStdHandle(STD_OUTPUT_HANDLE);
+    /* Our own copy of the console handle: _dup2 below closes the original,
+     * and Windows can hand that same handle value to the pipe - mirroring
+     * to it would then feed the log back into itself. Only mirror if it
+     * really is a console. */
+    HANDLE original = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD console_mode;
+    g_console = INVALID_HANDLE_VALUE;
+    if (original && original != INVALID_HANDLE_VALUE && GetConsoleMode(original, &console_mode)) {
+        HANDLE dup = NULL;
+        if (DuplicateHandle(GetCurrentProcess(), original, GetCurrentProcess(), &dup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+            g_console = dup;
+        }
+    }
     g_file = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     InitializeCriticalSection(&g_ring_lock);
     InitializeCriticalSection(&g_emit_lock);
@@ -212,10 +224,8 @@ void log_init(const char *path) {
     setvbuf(stderr, NULL, _IONBF, 0);
 
     CloseHandle(CreateThread(NULL, 0, logger_thread, NULL, 0, NULL));
-    if (g_console != INVALID_HANDLE_VALUE && g_console != NULL) {
+    if (g_console != INVALID_HANDLE_VALUE) {
         CloseHandle(CreateThread(NULL, 0, console_thread, NULL, 0, NULL));
-    } else {
-        g_console = INVALID_HANDLE_VALUE;
     }
 }
 
