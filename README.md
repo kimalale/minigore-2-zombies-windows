@@ -176,7 +176,7 @@ A watchdog thread monitors presented frames. If the game stops drawing while the
 - live host mutex / condition variable counts and the input queue depth
 - every game thread's registers and a stack scan symbolized against `libminigore2.so` (mangled C++ names; pipe through `c++filt` to demangle)
 
-If the game crashes, `crash_report.txt` records the exception, where it happened and the registers. Please attach whichever file appears when reporting a problem.
+If the game crashes, `crash_report.txt` records the exception, where it happened and the registers. Everything the game prints is also saved to `game_log.txt`, even if the window closes. Please attach these files when reporting a problem.
 
 ---
 

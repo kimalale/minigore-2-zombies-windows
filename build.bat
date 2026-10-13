@@ -20,6 +20,7 @@ gcc %CFLAGS% ^
     native_port\opensles.c ^
     native_port\shims.c ^
     native_port\watchdog.c ^
+    native_port\log.c ^
     native_port\ai_core.c ^
     native_port\ai_hooks.c ^
     native_port\hook_util.c ^

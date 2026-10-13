@@ -227,7 +227,7 @@ static void write_report(void) {
     }
     LeaveCriticalSection(&g_wd_lock);
 
-    printf("\n[Watchdog] Report written to hang_report.txt\n");
+    printf("\n[Watchdog] Report written to hang_report.txt (full log: game_log.txt)\n");
     fflush(stdout);
     if (out) fclose(out);
 }

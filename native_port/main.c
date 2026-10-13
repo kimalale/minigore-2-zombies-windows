@@ -14,6 +14,7 @@
 #include "android_ndk.h"
 #include "opensles.h"
 #include "watchdog.h"
+#include "log.h"
 #include "ai_core.h"
 #include "ai_hooks.h"
 #include "gun_hooks.h"
@@ -508,7 +509,7 @@ static LONG WINAPI crash_handler(EXCEPTION_POINTERS *ep) {
         if (o == 1) fclose(f);
     }
     printf("[Crash] Details written to crash_report.txt\n");
-    fflush(stdout);
+    log_flush();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -536,6 +537,9 @@ static DWORD WINAPI game_thread_proc(LPVOID data) {
 }
 
 int main(int argc, char *argv[]) {
+    /* Everything printed also goes to game_log.txt; the console can never
+     * stall the game */
+    log_init("game_log.txt");
     AddVectoredExceptionHandler(1, stack_commit_handler);
     SetUnhandledExceptionFilter(crash_handler);
     
@@ -938,5 +942,6 @@ int main(int argc, char *argv[]) {
     SDL_Quit();
     
     printf("[Host] Exited cleanly.\n");
+    log_flush();
     return 0;
 }
