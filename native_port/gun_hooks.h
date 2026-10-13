@@ -33,7 +33,7 @@ int gun_in_level(void);
 int gun_take_rumble(float *low, float *high, unsigned *ms);
 
 /* Direct stick input from the input thread, in the game's pad convention
- * (x right, y up, length <= 1). Applied right after the game reads its
+ * (x right, y down - getTouchAsPad negates its GL-up y - length <= 1). Applied right after the game reads its
  * touch sticks, replacing touch emulation for keyboard, mouse aim and
  * controllers. A zero vector leaves that stick to the touch screen.
  * Returns 1 if the direct path is available. */

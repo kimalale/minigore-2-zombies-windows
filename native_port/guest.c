@@ -186,7 +186,7 @@ int guest_main(const GuestConfig *cfg) {
     SDL_Rect view = { 0, 0, 1280, 720 };
     MsgVideoHeader info;
     memset(&info, 0, sizeof(info));
-    float last_aim_x = 0.0f, last_aim_y = 1.0f; /* pad convention: y up */
+    float last_aim_x = 0.0f, last_aim_y = -1.0f; /* pad convention: y down, so this is "up" */
     char shown_status[512] = "";
     int running = 1;
 
@@ -243,27 +243,27 @@ int guest_main(const GuestConfig *cfg) {
             view.y = (wh - view.h) / 2;
         }
 
-        /* Controls -> game pad convention (x right, y up) */
+        /* Controls -> game pad convention (x right, y down, as on screen) */
         MsgInput in;
         memset(&in, 0, sizeof(in));
         const Uint8 *keys = SDL_GetKeyboardState(NULL);
         float mx = 0, my = 0, ax = 0, ay = 0, x, y;
-        if (keys[SDL_SCANCODE_W]) my += 1;
-        if (keys[SDL_SCANCODE_S]) my -= 1;
+        if (keys[SDL_SCANCODE_W]) my -= 1;
+        if (keys[SDL_SCANCODE_S]) my += 1;
         if (keys[SDL_SCANCODE_A]) mx -= 1;
         if (keys[SDL_SCANCODE_D]) mx += 1;
-        if (keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_I]) ay += 1;
-        if (keys[SDL_SCANCODE_DOWN] || keys[SDL_SCANCODE_K]) ay -= 1;
+        if (keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_I]) ay -= 1;
+        if (keys[SDL_SCANCODE_DOWN] || keys[SDL_SCANCODE_K]) ay += 1;
         if (keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_J]) ax -= 1;
         if (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_L]) ax += 1;
-        if (stick(pad, SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, &x, &y) > 0) { mx = x; my = -y; }
+        if (stick(pad, SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, &x, &y) > 0) { mx = x; my = y; }
         if (pad) {
-            if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP)) my += 1;
-            if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) my -= 1;
+            if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP)) my -= 1;
+            if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) my += 1;
             if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) mx -= 1;
             if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) mx += 1;
         }
-        if (stick(pad, SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY, &x, &y) > 0) { ax = x; ay = -y; }
+        if (stick(pad, SDL_CONTROLLER_AXIS_RIGHTX, SDL_CONTROLLER_AXIS_RIGHTY, &x, &y) > 0) { ax = x; ay = y; }
 
         /* Mouse: hold the left button to aim from player 2 to the cursor */
         int cx, cy;
@@ -273,7 +273,7 @@ int guest_main(const GuestConfig *cfg) {
             float py = view.y + info.p2_y * view.h;
             float dx = cx - px, dy = cy - py;
             float l = sqrtf(dx * dx + dy * dy);
-            if (l > 8.0f) { ax = dx / l; ay = -dy / l; }
+            if (l > 8.0f) { ax = dx / l; ay = dy / l; }
             else { ax = last_aim_x; ay = last_aim_y; }
         }
 

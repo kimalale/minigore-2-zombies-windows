@@ -37,7 +37,7 @@ typedef struct {
     uint8_t own_view;         /* 1: this is player 2's own camera */
 } MsgVideoHeader;
 
-/* Sticks use the game's pad convention: x right, y up, length <= 1 */
+/* Sticks use the game's pad convention: x right, y down (as on screen), length <= 1 */
 typedef struct {
     float move_x, move_y;
     float aim_x, aim_y;
