@@ -38,6 +38,69 @@ static float g_mouse_y = 0.0f;
 
 static SDL_GameController *g_gamepad = NULL;
 
+/* Video settings (overridable from the command line) */
+typedef struct {
+    int width;
+    int height;
+    int fullscreen;
+    int msaa;        /* MSAA samples, 0 = off */
+    int anisotropy;  /* anisotropic filtering level, <= 1 = off */
+} video_config_t;
+
+static void print_usage(const char *exe) {
+    printf("Usage: %s [options]\n", exe);
+    printf("  --width <px>      Window width  (default 1280)\n");
+    printf("  --height <px>     Window height (default 720)\n");
+    printf("  --fullscreen      Start in borderless fullscreen at desktop resolution\n");
+    printf("  --msaa <n>        Multisample anti-aliasing samples: 0, 2, 4, 8 (default 4)\n");
+    printf("  --aniso <n>       Anisotropic filtering level: 0-16 (default 16)\n");
+    printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
+}
+
+static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
+    cfg->width = 1280;
+    cfg->height = 720;
+    cfg->fullscreen = 0;
+    cfg->msaa = 4;
+    cfg->anisotropy = 16;
+
+    for (int i = 1; i < argc; i++) {
+        const char *arg = argv[i];
+        int has_val = (i + 1 < argc);
+        if (strcmp(arg, "--width") == 0 && has_val) {
+            cfg->width = atoi(argv[++i]);
+        } else if (strcmp(arg, "--height") == 0 && has_val) {
+            cfg->height = atoi(argv[++i]);
+        } else if (strcmp(arg, "--fullscreen") == 0) {
+            cfg->fullscreen = 1;
+        } else if (strcmp(arg, "--msaa") == 0 && has_val) {
+            cfg->msaa = atoi(argv[++i]);
+        } else if (strcmp(arg, "--aniso") == 0 && has_val) {
+            cfg->anisotropy = atoi(argv[++i]);
+        } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else {
+            fprintf(stderr, "Unknown or incomplete option: %s\n", arg);
+            print_usage(argv[0]);
+            return 0;
+        }
+    }
+
+    if (cfg->width < 640) cfg->width = 640;
+    if (cfg->height < 360) cfg->height = 360;
+    if (cfg->msaa < 0) cfg->msaa = 0;
+    if (cfg->msaa > 16) cfg->msaa = 16;
+    if (cfg->anisotropy > 16) cfg->anisotropy = 16;
+    return 1;
+}
+
+static void toggle_fullscreen(void) {
+    Uint32 flags = SDL_GetWindowFlags(g_window);
+    int is_full = (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+    SDL_SetWindowFullscreen(g_window, is_full ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+}
+
 static void update_touch_events(void) {
     bool right_active = g_mouse_active || g_aim_active;
     float right_x = g_mouse_active ? g_mouse_x : g_aim_x;
@@ -252,6 +315,17 @@ static DWORD WINAPI game_thread_proc(LPVOID data) {
 int main(int argc, char *argv[]) {
     AddVectoredExceptionHandler(1, crash_handler);
     
+    video_config_t video;
+    if (!parse_video_config(argc, argv, &video)) {
+        return 1;
+    }
+    g_win_w = video.width;
+    g_win_h = video.height;
+    
+    /* Render at true pixel resolution instead of letting Windows
+     * bitmap-stretch the window on high-DPI displays. */
+    SetProcessDPIAware();
+    
     printf("====================================================\n");
     printf("  Minigore 2: Zombies - Native Windows Recompilation\n");
     printf("  Direct Android x86 ELF Loader under WOW64\n");
@@ -273,13 +347,36 @@ int main(int argc, char *argv[]) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    /* The pixel format (and so MSAA) is fixed when the window is created;
+     * the GL context itself is created later on the game thread. */
+    if (video.msaa > 0) {
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, video.msaa);
+    }
+    
+    Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    if (video.fullscreen) {
+        window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+    }
     
     g_window = SDL_CreateWindow(
         "Minigore 2: Zombies",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         g_win_w, g_win_h,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+        window_flags
     );
+    if (!g_window && video.msaa > 0) {
+        fprintf(stderr, "MSAA x%d unavailable (%s), retrying without it\n", video.msaa, SDL_GetError());
+        video.msaa = 0;
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+        g_window = SDL_CreateWindow(
+            "Minigore 2: Zombies",
+            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+            g_win_w, g_win_h,
+            window_flags
+        );
+    }
     
     if (!g_window) {
         fprintf(stderr, "Failed to create SDL window: %s\n", SDL_GetError());
@@ -287,9 +384,17 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
+    /* Fullscreen windows take the desktop size */
+    SDL_GetWindowSize(g_window, &g_win_w, &g_win_h);
+    printf("[Host] Render resolution %dx%d%s, MSAA x%d, anisotropy %dx\n",
+           g_win_w, g_win_h, video.fullscreen ? " (fullscreen)" : "", video.msaa,
+           video.anisotropy > 1 ? video.anisotropy : 1);
+    
     /* Initialize host wrapper subsystems */
     shims_init();
+    gl_wrap_set_anisotropy(video.anisotropy);
     egl_wrap_init(g_window);
+    egl_wrap_set_msaa(video.msaa > 0);
     opensles_init();
     android_ndk_init(g_win_w, g_win_h);
     
@@ -356,10 +461,11 @@ int main(int argc, char *argv[]) {
                     break;
                     
                 case SDL_WINDOWEVENT:
-                    if (ev.window.event == SDL_WINDOWEVENT_RESIZED ||
-                        ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                    /* SIZE_CHANGED covers user resizes and fullscreen toggles */
+                    if (ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
                         g_win_w = ev.window.data1;
                         g_win_h = ev.window.data2;
+                        android_app_set_window_size(g_win_w, g_win_h);
                         android_app_push_cmd(APP_CMD_WINDOW_RESIZED);
                     } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                         watchdog_set_focused(1);
@@ -413,6 +519,15 @@ int main(int argc, char *argv[]) {
                 case SDL_KEYDOWN:
                 case SDL_KEYUP: {
                     int action = (ev.type == SDL_KEYDOWN) ? AKEY_EVENT_ACTION_DOWN : AKEY_EVENT_ACTION_UP;
+                    
+                    /* F11 / Alt+Enter: toggle fullscreen (not forwarded to the game) */
+                    if (ev.key.keysym.sym == SDLK_F11 ||
+                        (ev.key.keysym.sym == SDLK_RETURN && (ev.key.keysym.mod & KMOD_ALT))) {
+                        if (ev.type == SDL_KEYDOWN && !ev.key.repeat) {
+                            toggle_fullscreen();
+                        }
+                        break;
+                    }
                     
                     /* Update WASD virtual movement */
                     if (ev.key.keysym.scancode == SDL_SCANCODE_W ||

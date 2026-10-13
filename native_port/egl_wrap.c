@@ -29,7 +29,12 @@ typedef uint32_t EGLenum;
 #define EGL_DRAW            0x3059
 #define EGL_READ            0x305a
 
+#ifndef GL_MULTISAMPLE
+#define GL_MULTISAMPLE 0x809D
+#endif
+
 static SDL_Window *g_egl_window = NULL;
+static int g_msaa_enabled = 0;
 static SDL_GLContext g_gl_context = NULL;
 static EGLContext g_current_ctx = NULL;
 static EGLSurface g_current_draw = NULL;
@@ -41,6 +46,10 @@ void egl_wrap_init(SDL_Window *window) {
     g_current_ctx = NULL;
     g_current_draw = NULL;
     g_current_read = NULL;
+}
+
+void egl_wrap_set_msaa(int enabled) {
+    g_msaa_enabled = enabled;
 }
 
 void egl_wrap_shutdown(void) {
@@ -97,6 +106,7 @@ EGLContext CDECL wrap_eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLCont
         if (g_gl_context) {
             SDL_GL_MakeCurrent(g_egl_window, g_gl_context);
             SDL_GL_SetSwapInterval(1); /* VSync */
+            if (g_msaa_enabled) glEnable(GL_MULTISAMPLE);
             gl_wrap_init();
             printf("[EGL] Context created: %s\n", (const char *)glGetString(GL_VERSION));
             printf("[EGL] Renderer: %s\n", (const char *)glGetString(GL_RENDERER));
@@ -143,7 +153,7 @@ EGLSurface CDECL wrap_eglGetCurrentSurface(EGLint readdraw) {
 EGLBoolean CDECL wrap_eglQuerySurface(EGLDisplay dpy, EGLSurface surface, EGLint attribute, EGLint *value) {
     int w = 1280, h = 720;
     if (g_egl_window) {
-        SDL_GetWindowSize(g_egl_window, &w, &h);
+        SDL_GL_GetDrawableSize(g_egl_window, &w, &h);
     }
     if (value) {
         if (attribute == EGL_WIDTH) {

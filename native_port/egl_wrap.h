@@ -11,6 +11,9 @@ extern "C" {
 void egl_wrap_init(SDL_Window *window);
 void egl_wrap_shutdown(void);
 
+/* Window was created with a multisampled pixel format */
+void egl_wrap_set_msaa(int enabled);
+
 #ifdef __cplusplus
 }
 #endif
