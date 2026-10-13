@@ -1,5 +1,6 @@
 #include "egl_wrap.h"
 #include "gl_wrap.h"
+#include "watchdog.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <stdio.h>
@@ -162,6 +163,7 @@ EGLBoolean CDECL wrap_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         SDL_GL_SwapWindow(g_egl_window);
     }
     s_swap_count++;
+    watchdog_frame();
     if ((s_swap_count % 300) == 1) {
         printf("[EGL] Frame %d swapped (60 FPS)\n", s_swap_count);
         fflush(stdout);

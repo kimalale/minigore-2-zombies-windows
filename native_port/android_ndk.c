@@ -71,7 +71,7 @@ typedef struct {
     } pointers[2];
 } NativeInputEvent;
 
-#define MAX_EVENTS 64
+#define MAX_EVENTS 256
 #define MAX_CMDS   64
 
 static struct android_app g_app;
@@ -205,8 +205,30 @@ void android_app_push_cmd(int8_t cmd) {
 
 void android_app_push_motion_event(int action, int pointer_count, float x0, float y0, float x1, float y1) {
     EnterCriticalSection(&g_queue_cs);
+
+    /* Coalesce consecutive MOVEs: while the game thread is busy (level
+     * loads, hitches) a held mouse or stick generates hundreds of moves per
+     * second. They used to fill the queue, after which the matching UP /
+     * POINTER_UP was dropped and the game kept a phantom finger down, making
+     * controls appear frozen. Only the latest position matters. */
+    if (action == AMOTION_EVENT_ACTION_MOVE && g_event_head != g_event_tail) {
+        NativeInputEvent *last = &g_event_queue[(g_event_head + MAX_EVENTS - 1) % MAX_EVENTS];
+        if (last->type == AINPUT_EVENT_TYPE_MOTION && last->action == AMOTION_EVENT_ACTION_MOVE &&
+            last->pointer_count == pointer_count) {
+            last->pointers[0].x = x0;
+            last->pointers[0].y = y0;
+            last->pointers[1].x = x1;
+            last->pointers[1].y = y1;
+            LeaveCriticalSection(&g_queue_cs);
+            if (g_looper_event) SetEvent(g_looper_event);
+            return;
+        }
+    }
+
     int next = (g_event_head + 1) % MAX_EVENTS;
-    if (next != g_event_tail) {
+    if (next == g_event_tail) {
+        printf("[NDK] Input queue full, dropping motion event (action 0x%x)\n", action);
+    } else {
         NativeInputEvent *ev = &g_event_queue[g_event_head];
         ev->type = AINPUT_EVENT_TYPE_MOTION;
         ev->source = AINPUT_SOURCE_TOUCHSCREEN;
@@ -241,6 +263,13 @@ void android_app_push_key_event(int action, int keycode) {
     }
     LeaveCriticalSection(&g_queue_cs);
     if (g_looper_event) SetEvent(g_looper_event);
+}
+
+int android_app_input_queue_depth(void) {
+    EnterCriticalSection(&g_queue_cs);
+    int depth = (g_event_head - g_event_tail + MAX_EVENTS) % MAX_EVENTS;
+    LeaveCriticalSection(&g_queue_cs);
+    return depth;
 }
 
 int android_app_is_destroy_requested(void) {

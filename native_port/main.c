@@ -13,6 +13,7 @@
 #include "egl_wrap.h"
 #include "android_ndk.h"
 #include "opensles.h"
+#include "watchdog.h"
 
 typedef void (*android_main_fn)(struct android_app *state);
 
@@ -189,8 +190,14 @@ static void update_aim_stick(void) {
 static LONG WINAPI crash_handler(EXCEPTION_POINTERS *ep) {
     if (ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
         ULONG_PTR fault_addr = ep->ExceptionRecord->ExceptionInformation[1];
-        MEMORY_BASIC_INFORMATION mbi;
-        if (VirtualQuery((void *)fault_addr, &mbi, sizeof(mbi))) {
+        MEMORY_BASIC_INFORMATION mbi, own_stack;
+        /* Only commit on demand inside the faulting thread's own stack
+         * reservation. This used to apply to any reserved page, so a stray
+         * read into reserved heap got a zero page and the game carried on
+         * with garbage (e.g. spinning forever) instead of crashing. */
+        if (VirtualQuery((void *)fault_addr, &mbi, sizeof(mbi)) &&
+            VirtualQuery(&own_stack, &own_stack, sizeof(own_stack)) &&
+            mbi.AllocationBase == own_stack.AllocationBase) {
             if (mbi.State == MEM_RESERVE) {
                 /* Reserved stack page accessed past guard page - commit on demand */
                 void *page = (void *)(fault_addr & ~0xFFF);
@@ -311,6 +318,9 @@ int main(int argc, char *argv[]) {
     fflush(stdout);
     elf_init(&mod);
     
+    watchdog_start(&mod);
+    watchdog_register_thread(GetCurrentThread(), "main");
+    
     /* Find android_main entry point */
     android_main_fn p_android_main = (android_main_fn)elf_sym(&mod, "android_main");
     if (!p_android_main) {
@@ -333,6 +343,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "[Host] Failed to create game thread: %lu\n", GetLastError());
         return 1;
     }
+    watchdog_register_thread(g_game_thread, "game");
     
     /* Main Event Loop */
     SDL_Event ev;
@@ -351,8 +362,10 @@ int main(int argc, char *argv[]) {
                         g_win_h = ev.window.data2;
                         android_app_push_cmd(APP_CMD_WINDOW_RESIZED);
                     } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+                        watchdog_set_focused(1);
                         android_app_push_cmd(APP_CMD_GAINED_FOCUS);
                     } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                        watchdog_set_focused(0);
                         android_app_push_cmd(APP_CMD_LOST_FOCUS);
                     }
                     break;
