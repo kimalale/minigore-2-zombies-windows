@@ -137,6 +137,39 @@ These hook the original binary through its GOT and vtables (`native_port/gun_hoo
 
 ---
 
+## Online Co-op (Peer to Peer)
+
+Play the campaign with a friend over the internet or your local network. No server or account needed: one player hosts, the other joins directly.
+
+**Host (player 1):**
+```cmd
+run.bat --host
+```
+**Friend (player 2)** joins with the host's IP address:
+```cmd
+run.bat --join 203.0.113.7
+```
+
+- Player 2 drops in as an extra character beside you, with their own gun and health, once you start a level. If they go down they respawn after a few seconds.
+- The camera keeps both of you in view, pulling back as you spread out.
+- Player 2 sees your game streamed to their window (video and sound) and plays with keyboard, mouse (hold the left button to aim) or an Xbox controller. The host drives the menus.
+- If the connection drops, the guest reconnects on its own, and player 2's character falls back to the game's companion AI in the meantime.
+
+**Connecting over the internet:** the host must forward **TCP port 27015** on their router to their PC, or both players can join the same virtual LAN with Tailscale, ZeroTier or Radmin VPN and use that address. On the same home network, use the LAN address the host's console prints.
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--host [port]` | `27015` | Host a game |
+| `--join <ip[:port]>` | — | Join a host as player 2 |
+| `--code <text>` | — | Join code; set the same on both sides to keep strangers out |
+| `--coop-width <px>` | `960` | Streamed video width |
+| `--coop-fps <n>` | `30` | Streamed frame rate |
+| `--coop-quality <10-95>` | `60` | JPEG quality; lower it (and the width) on slow uploads |
+
+At the defaults the stream needs roughly 8-12 Mbit/s of upload from the host; `--coop-width 640 --coop-quality 45` brings that to about 3-4 Mbit/s.
+
+---
+
 ## Troubleshooting Freezes
 
 A watchdog thread monitors presented frames. If the game stops drawing for 6 seconds while the window is focused, it writes `hang_report.txt` (also printed to the console) with:

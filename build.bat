@@ -24,6 +24,11 @@ gcc %CFLAGS% ^
     native_port\ai_hooks.c ^
     native_port\hook_util.c ^
     native_port\gun_hooks.c ^
+    native_port\net_proto.c ^
+    native_port\net_host.c ^
+    native_port\coop.c ^
+    native_port\guest.c ^
+    native_port\stb_impl.c ^
     %LDFLAGS% ^
     -o Minigore2_Windows.exe
 

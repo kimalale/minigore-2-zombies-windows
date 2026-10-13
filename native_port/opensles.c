@@ -1,4 +1,5 @@
 #include "opensles.h"
+#include "net_host.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -391,6 +392,7 @@ static void sdl_audio_cb(void *userdata, Uint8 *stream, int len) {
     if (samples_to_render * (int)sizeof(int16_t) < len) {
         memset(stream + samples_to_render * sizeof(int16_t), 0, len - samples_to_render * sizeof(int16_t));
     }
+    net_host_audio(stream, len); /* co-op: player 2 hears the same mix */
     
     /* Fire completed buffer callbacks outside the audio mutex, skipping any
      * whose player was destroyed (and possibly reused) in the meantime */

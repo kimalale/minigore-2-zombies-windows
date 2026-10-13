@@ -32,6 +32,16 @@ int gun_in_level(void);
  * Returns 1 and the strongest pending request, clearing it. */
 int gun_take_rumble(float *low, float *high, unsigned *ms);
 
+/* Projects a ground-plane world position to window pixels using the
+ * game's last view-projection matrix. Returns 0 if it is behind the camera. */
+int gun_project_ground(float x, float z, float *sx, float *sy);
+/* Same, but 0..1 across the screen (y down). */
+int gun_project_ground_normalized(float x, float z, float *nx, float *ny);
+
+/* Lets co-op reframe the camera: called with modifiable eye / look-at
+ * vectors every time the game sets up its camera. */
+void gun_set_camera_adjust(void (*adjust)(float eye[3], float look[3]));
+
 #ifdef __cplusplus
 }
 #endif
