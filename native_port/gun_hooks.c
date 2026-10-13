@@ -70,6 +70,7 @@ typedef void *(__attribute__((cdecl)) *GetGunFn)(const void *character, int inde
 typedef int   (__attribute__((cdecl)) *ScreenSizeFn)(void);
 typedef int   (__attribute__((cdecl)) *EntityIntFn)(void *entity);
 typedef void  (__attribute__((cdecl)) *StartShakeFn)(void *shaker);
+typedef void  (__attribute__((cdecl)) *UpdateControlsFn)(void *state, float dt);
 typedef int   (__attribute__((cdecl)) *DieFn)(void *self, const void *damage, float t);
 
 static GunConfig g_cfg;
@@ -89,6 +90,13 @@ static GetGunFn g_get_gun;
 static ScreenSizeFn g_screen_w;
 static ScreenSizeFn g_screen_h;
 static StartShakeFn o_start_shake;
+static UpdateControlsFn o_update_controls;
+
+/* Direct sticks published by the input thread (g_stick_lock) */
+#define ENV_STICKS 0x1f6040  /* move x, y, aim x, y */
+static CRITICAL_SECTION g_stick_lock;
+static float g_sticks[4];
+static DWORD g_sticks_tick = 0;
 static DieFn o_die;
 
 /* Pending rumble for the input thread: strongest request wins */
@@ -177,6 +185,44 @@ static int __attribute__((cdecl)) h_control_update(void *self, float dt, void *c
     publish_player_screen_pos();
     InterlockedExchange(&g_controls_tick, (LONG)GetTickCount());
     return o_control_update(self, dt, character);
+}
+
+int gun_set_sticks(float move_x, float move_y, float aim_x, float aim_y) {
+    if (!o_update_controls) return 0;
+    EnterCriticalSection(&g_stick_lock);
+    g_sticks[0] = move_x;
+    g_sticks[1] = move_y;
+    g_sticks[2] = aim_x;
+    g_sticks[3] = aim_y;
+    g_sticks_tick = GetTickCount();
+    LeaveCriticalSection(&g_stick_lock);
+    return 1;
+}
+
+/* StateGame::updateControls zeroes the sticks and rebuilds them from
+ * touches. Afterwards, write the exact vectors from the keyboard, mouse or
+ * controller - the same globals the engine's own gamepad support writes on
+ * touchless devices - instead of emulating touches on a virtual stick
+ * whose centre and size only approximately matched the game's. */
+static void __attribute__((cdecl)) h_update_controls(void *state, float dt) {
+    o_update_controls(state, dt);
+    uint8_t *e = env();
+    if (!e) return;
+    float s[4];
+    EnterCriticalSection(&g_stick_lock);
+    int fresh = g_sticks_tick != 0 && GetTickCount() - g_sticks_tick < 200;
+    memcpy(s, g_sticks, sizeof(s));
+    LeaveCriticalSection(&g_stick_lock);
+    if (!fresh) return;
+    float *sticks = (float *)(e + ENV_STICKS);
+    if (s[0] != 0.0f || s[1] != 0.0f) {
+        sticks[0] = s[0];
+        sticks[1] = s[1];
+    }
+    if (s[2] != 0.0f || s[3] != 0.0f) {
+        sticks[2] = s[2];
+        sticks[3] = s[3];
+    }
 }
 
 int gun_in_level(void) {
@@ -424,6 +470,7 @@ void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg) {
     g_cfg = *cfg;
     QueryPerformanceFrequency(&g_qpc_freq);
     InitializeCriticalSection(&g_rumble_lock);
+    InitializeCriticalSection(&g_stick_lock);
     InterlockedExchange(&g_rumble_ready, 1);
     g_env = (uint8_t **)elf_sym(mod, "m_env");
     if (!g_env) {
@@ -452,6 +499,7 @@ void gun_hooks_install(elf_module_t *mod, const GunConfig *cfg) {
         o_apply_damage2 = (ApplyProjectileDamageFn)hook_got(mod, "_Z21applyProjectileDamagefRKN2xt7Vector2IfEES3_jPKjjy", (void *)h_apply_damage2);
     }
     o_start_shake = (StartShakeFn)hook_got(mod, "_ZN12CameraShaker10startShakeEv", (void *)h_start_shake);
+    o_update_controls = (UpdateControlsFn)hook_got(mod, "_ZN9StateGame14updateControlsEf", (void *)h_update_controls);
     o_die = (DieFn)hook_got(mod, "_ZN15PlayerCharacter3dieERK6Damagef", (void *)h_die);
 
     if (cfg->smart_autoaim && g_query) {

@@ -32,6 +32,13 @@ int gun_in_level(void);
  * Returns 1 and the strongest pending request, clearing it. */
 int gun_take_rumble(float *low, float *high, unsigned *ms);
 
+/* Direct stick input from the input thread, in the game's pad convention
+ * (x right, y up, length <= 1). Applied right after the game reads its
+ * touch sticks, replacing touch emulation for keyboard, mouse aim and
+ * controllers. A zero vector leaves that stick to the touch screen.
+ * Returns 1 if the direct path is available. */
+int gun_set_sticks(float move_x, float move_y, float aim_x, float aim_y);
+
 /* Projects a ground-plane world position to window pixels using the
  * game's last view-projection matrix. Returns 0 if it is behind the camera. */
 int gun_project_ground(float x, float z, float *sx, float *sy);

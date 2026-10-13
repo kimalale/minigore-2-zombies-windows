@@ -31,6 +31,7 @@ gcc %CFLAGS% ^
     native_port\ai_hooks.c ^
     native_port\hook_util.c ^
     native_port\gun_hooks.c ^
+    native_port\ui_nav.c ^
     native_port\net_proto.c ^
     native_port\net_host.c ^
     native_port\coop.c ^
