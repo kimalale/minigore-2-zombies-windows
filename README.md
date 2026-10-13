@@ -37,8 +37,8 @@ Instead of rewriting or recreating the game in Unity or another engine, this pro
 | Action | Keyboard | Mouse | Gamepad |
 | :--- | :--- | :--- | :--- |
 | **Move** | `W` `A` `S` `D` | — | Left Analog Stick |
-| **Aim & Shoot** | Arrow Keys / `I` `J` `K` `L` | Left Click & Drag | Right Analog Stick |
-| **Menu Selection** | — | Left Click | A Button / D-Pad |
+| **Aim & Shoot** | Arrow Keys / `I` `J` `K` `L` | Hold Left Button (aims at cursor) | Right Analog Stick |
+| **Menu Selection** | — | Left Click (Right Click on in-game HUD) | A Button / D-Pad |
 | **Action / Confirm** | `Space` / `Enter` | Left Click | A Button |
 | **Pause / Back** | `Escape` | — | B Button / Start |
 
@@ -103,6 +103,25 @@ By default zombies use a new pursuit AI instead of running straight at you in a 
 | `--ai-no-bosses` | — | Bosses and the horde don't coordinate |
 
 The AI hooks into `ZombieStateFollow::update` in the original binary (`native_port/ai_hooks.c`); the steering itself lives in `native_port/ai_core.c`.
+
+---
+
+## Guns
+
+- **Mouse aiming:** during a level, hold the **left mouse button** to aim at the cursor and fire, like a PC twin-stick shooter. Use the **right mouse button** to tap on-screen HUD buttons. In menus the left button clicks as before.
+- **Recoil kick:** every shot nudges the camera back along your aim, scaled by the weapon's punch (the shotgun kicks hard, the machine gun lightly). It stacks with the game's own screen shakes.
+- **Rebalanced:** your guns deal 20% more damage and ammo pickups hold 30% more rounds, to keep pace with the smarter horde.
+- **Smarter aim assist:** with the game's *Auto Aim* option switched on, the assist picks the most dangerous target near where you're aiming instead of just the nearest enemy: zombies about to reach you, throwers bombing you, and bosses. It reaches far enough to answer throwers holding back at range, and it never swings your aim more than 40° away from where you're pointing.
+
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--no-mouse-aim` | — | Left mouse button acts as a touch, as before |
+| `--gun-kick <0-2>` | `1` | Camera recoil strength (`0` disables) |
+| `--gun-damage <0.5-3>` | `1.2` | Player gun damage multiplier |
+| `--gun-ammo <0.5-3>` | `1.3` | Rounds per ammo pickup multiplier |
+| `--no-smart-aim` | — | Original aim assist (nearest enemy) |
+
+These hook the original binary through its GOT and vtables (`native_port/gun_hooks.c`, `native_port/hook_util.c`); no game code is patched.
 
 ---
 
