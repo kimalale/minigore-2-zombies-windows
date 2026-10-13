@@ -156,6 +156,7 @@ struct android_app *android_app_get(void);
 void android_app_push_cmd(int8_t cmd);
 void android_app_push_motion_event(int action, int pointer_count, float x0, float y0, float x1, float y1);
 void android_app_push_key_event(int action, int keycode);
+void android_app_set_window_size(int width, int height);
 int android_app_input_queue_depth(void);
 int android_app_is_destroy_requested(void);
 

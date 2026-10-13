@@ -102,6 +102,21 @@ static PFN_glUniformMatrix4fv pfn_glUniformMatrix4fv = NULL;
 static PFN_glUseProgram pfn_glUseProgram = NULL;
 static PFN_glVertexAttribPointer pfn_glVertexAttribPointer = NULL;
 
+/* Texture quality: the game uploads its own mip chains (Texture2048) but
+ * samples them bilinearly between levels and without anisotropy, which
+ * blurs and shimmers the ground at the camera's grazing angle. */
+#ifndef GL_TEXTURE_MAX_ANISOTROPY_EXT
+#define GL_TEXTURE_MAX_ANISOTROPY_EXT     0x84FE
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+#endif
+
+static int g_requested_aniso = 16;
+static float g_tex_aniso = 0.0f;
+
+void gl_wrap_set_anisotropy(int level) {
+    g_requested_aniso = level;
+}
+
 void gl_wrap_init(void) {
     pfn_glActiveTexture = (PFN_glActiveTexture)SDL_GL_GetProcAddress("glActiveTexture");
     pfn_glAttachShader = (PFN_glAttachShader)SDL_GL_GetProcAddress("glAttachShader");
@@ -152,6 +167,17 @@ void gl_wrap_init(void) {
     pfn_glUniformMatrix4fv = (PFN_glUniformMatrix4fv)SDL_GL_GetProcAddress("glUniformMatrix4fv");
     pfn_glUseProgram = (PFN_glUseProgram)SDL_GL_GetProcAddress("glUseProgram");
     pfn_glVertexAttribPointer = (PFN_glVertexAttribPointer)SDL_GL_GetProcAddress("glVertexAttribPointer");
+
+    /* Anisotropic filtering, clamped to what the GPU supports */
+    g_tex_aniso = 0.0f;
+    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    if (g_requested_aniso > 1 && ext && strstr(ext, "GL_EXT_texture_filter_anisotropic")) {
+        GLfloat max_aniso = 1.0f;
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max_aniso);
+        g_tex_aniso = (float)g_requested_aniso < max_aniso ? (float)g_requested_aniso : max_aniso;
+    }
+    printf("[GL] Texture filtering: trilinear, anisotropy %.0fx\n", g_tex_aniso > 1.0f ? g_tex_aniso : 1.0f);
+    fflush(stdout);
 }
 
 /* __cdecl wrapper implementations */
@@ -421,6 +447,13 @@ void CDECL wrap_glTexImage2D(GLenum target, GLint level, GLint internalformat, G
 }
 
 void CDECL wrap_glTexParameteri(GLenum target, GLenum pname, GLint param) {
+    if (pname == GL_TEXTURE_MIN_FILTER &&
+        (param == GL_LINEAR_MIPMAP_NEAREST || param == GL_NEAREST_MIPMAP_LINEAR || param == GL_LINEAR_MIPMAP_LINEAR)) {
+        /* Mipmapped texture: blend between levels and add anisotropy */
+        glTexParameteri(target, pname, GL_LINEAR_MIPMAP_LINEAR);
+        if (g_tex_aniso > 1.0f) glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, g_tex_aniso);
+        return;
+    }
     glTexParameteri(target, pname, param);
 }
 

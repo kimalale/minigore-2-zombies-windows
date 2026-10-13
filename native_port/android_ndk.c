@@ -265,6 +265,11 @@ void android_app_push_key_event(int action, int keycode) {
     if (g_looper_event) SetEvent(g_looper_event);
 }
 
+void android_app_set_window_size(int width, int height) {
+    g_window.width = width;
+    g_window.height = height;
+}
+
 int android_app_input_queue_depth(void) {
     EnterCriticalSection(&g_queue_cs);
     int depth = (g_event_head - g_event_tail + MAX_EVENTS) % MAX_EVENTS;
