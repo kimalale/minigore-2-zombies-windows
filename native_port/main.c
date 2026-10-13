@@ -950,5 +950,7 @@ int main(int argc, char *argv[]) {
     
     printf("[Host] Exited cleanly.\n");
     log_flush();
-    return 0;
+    /* End the process even if the game thread didn't stop in time (it is
+     * only given 2 s above); returning from main would wait for it. */
+    ExitProcess(0);
 }

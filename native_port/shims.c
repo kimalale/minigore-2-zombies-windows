@@ -575,8 +575,27 @@ static int CDECL shim_pthread_attr_init(void *attr) { return 0; }
 static int CDECL shim_pthread_attr_setdetachstate(void *attr, int state) { return 0; }
 static int CDECL shim_sched_yield(void) { Sleep(0); return 0; }
 
-static long CDECL shim_lrand48(void) { return (long)(rand() & 0x7fffffff); }
-static void CDECL shim_srand48(long seed) { srand((unsigned int)seed); }
+/* POSIX lrand48 / srand48: a 48-bit linear congruential generator
+ * returning 31-bit results in [0, 2^31), as in Bionic. The port used
+ * msvcrt's rand(), which only returns 0..32767 - so game code computing
+ * lrand48() / 2^31 always got ~0.00001. The particle system's Gaussian
+ * sampler (polar method: retry until x^2 + y^2 <= 1 with x = 2u - 1) then
+ * looped forever, freezing the game the first time a damage effect was
+ * spawned (shooting the merchant or a zombie). */
+static volatile LONGLONG g_rand48_state = 0x1234ABCD330ELL; /* POSIX default seed */
+
+static long CDECL shim_lrand48(void) {
+    LONGLONG old, next;
+    do {
+        old = g_rand48_state;
+        next = (LONGLONG)(((unsigned long long)old * 0x5DEECE66DULL + 0xBULL) & 0xFFFFFFFFFFFFULL);
+    } while (InterlockedCompareExchange64(&g_rand48_state, next, old) != old);
+    return (long)((unsigned long long)next >> 17);
+}
+
+static void CDECL shim_srand48(long seed) {
+    InterlockedExchange64(&g_rand48_state, (LONGLONG)((((unsigned long long)(uint32_t)seed) << 16) | 0x330EULL));
+}
 
 static void * CDECL shim_memalign(size_t alignment, size_t size) {
     return malloc(size);
