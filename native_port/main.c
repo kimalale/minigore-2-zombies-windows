@@ -921,7 +921,7 @@ int main(int argc, char *argv[]) {
         update_wasd_stick();
         update_aim_stick();
         if (g_direct_sticks && gun_in_level()) {
-            gun_set_sticks(g_move_vx, -g_move_vy, g_aim_vx, -g_aim_vy); /* game: y up */
+            gun_set_sticks(g_move_vx, g_move_vy, g_aim_vx, g_aim_vy); /* game: y down, like the screen */
         }
         
         if (g_gamepad) {
