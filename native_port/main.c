@@ -15,6 +15,7 @@
 #include "opensles.h"
 #include "watchdog.h"
 #include "log.h"
+#include "java_stubs.h"
 #include "ai_core.h"
 #include "ai_hooks.h"
 #include "gun_hooks.h"
@@ -656,6 +657,7 @@ int main(int argc, char *argv[]) {
     fflush(stdout);
     elf_init(&mod);
     
+    java_stubs_install(&mod);
     ai_hooks_install(&mod);
     gun_hooks_install(&mod, &g_guns);
     if (g_coop_host && net_host_start(&g_host_cfg) == 0) {
