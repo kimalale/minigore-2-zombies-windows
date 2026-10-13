@@ -23,6 +23,7 @@
 #include "ai_core.h"
 #include "ai_hooks.h"
 #include "gun_hooks.h"
+#include "ui_nav.h"
 #include "net_host.h"
 #include "coop.h"
 #include "guest.h"
@@ -56,6 +57,14 @@ static bool g_mouse_aim_firing = false;
 static float g_mouse_aim_dx = 1.0f;
 static float g_mouse_aim_dy = 0.0f;
 static GunConfig g_guns;
+
+/* Direct sticks: in a level, keyboard / mouse aim / controller vectors are
+ * written straight into the game's stick state (see gun_set_sticks),
+ * screen convention here (y down). */
+static bool g_direct_sticks = false;
+static int g_touch_sticks = 0;  /* --touch-sticks */
+static float g_move_vx = 0.0f, g_move_vy = 0.0f;
+static float g_aim_vx = 0.0f, g_aim_vy = 0.0f;
 
 /* Online co-op */
 static int g_coop_host = 0;
@@ -120,6 +129,7 @@ static void print_usage(const char *exe) {
     printf("  --gun-damage <f>  Player gun damage multiplier, 0.5-3 (default 1.2)\n");
     printf("  --gun-ammo <f>    Ammo per pickup multiplier, 0.5-3 (default 1.3)\n");
     printf("  --no-smart-aim    Original aim assist (nearest enemy)\n");
+    printf("  --touch-sticks    Drive the sticks by emulating touches (the old method)\n");
     printf("Online co-op (player 2 joins over the network):\n");
     printf("  --host [port]     Host a game; a friend can join as player 2 (default port %d)\n", NET_DEFAULT_PORT);
     printf("  --join <ip[:port]> Join a friend's game as player 2\n");
@@ -186,6 +196,8 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             g_guns.ammo = (float)atof(argv[++i]);
         } else if (strcmp(arg, "--no-smart-aim") == 0) {
             g_guns.smart_autoaim = 0;
+        } else if (strcmp(arg, "--touch-sticks") == 0) {
+            g_touch_sticks = 1;
         } else if (strcmp(arg, "--host") == 0) {
             g_coop_host = 1;
             if (has_val && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9') g_host_cfg.port = atoi(argv[++i]);
@@ -357,6 +369,19 @@ static void update_wasd_stick(void) {
         if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) dx += 1.0f;
     }
     
+    if (g_direct_sticks && gun_in_level()) {
+        float l = sqrtf(dx * dx + dy * dy);
+        if (l > 1.0f) { dx /= l; dy /= l; }
+        g_move_vx = dx;
+        g_move_vy = dy;
+        if (g_wasd_active) { /* hand over from touch emulation */
+            g_wasd_active = false;
+            finger_set(FINGER_MOVE, false, g_wasd_x, g_wasd_y);
+        }
+        return;
+    }
+    g_move_vx = g_move_vy = 0.0f;
+    
     float len = sqrtf(dx * dx + dy * dy);
     if (len > 0.001f) {
         if (len > 1.0f) {
@@ -431,6 +456,19 @@ static void update_aim_stick(void) {
             g_mouse_aim_firing = false; /* level ended or paused */
         }
     }
+    
+    if (g_direct_sticks && gun_in_level()) {
+        float l = sqrtf(dx * dx + dy * dy);
+        if (l > 1.0f) { dx /= l; dy /= l; }
+        g_aim_vx = dx;
+        g_aim_vy = dy;
+        if (g_aim_active) {
+            g_aim_active = false;
+            finger_set(FINGER_AIM, false, g_aim_x, g_aim_y);
+        }
+        return;
+    }
+    g_aim_vx = g_aim_vy = 0.0f;
     
     float len = sqrtf(dx * dx + dy * dy);
     if (len > 0.001f) {
@@ -651,6 +689,9 @@ int main(int argc, char *argv[]) {
     java_stubs_install(&mod);
     ai_hooks_install(&mod);
     gun_hooks_install(&mod, &g_guns);
+    ui_nav_install(&mod);
+    g_direct_sticks = !g_touch_sticks && gun_set_sticks(0.0f, 0.0f, 0.0f, 0.0f) != 0;
+    printf("[Input] Sticks: %s\n", g_direct_sticks ? "direct (exact vectors)" : "touch emulation");
     if (g_coop_host && net_host_start(&g_host_cfg) == 0) {
         coop_install(&mod);
     }
@@ -824,6 +865,29 @@ int main(int argc, char *argv[]) {
                                 android_app_push_key_event(action, AKEYCODE_BUTTON_A);
                             }
                             break;
+                        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                            /* Menus: jump the cursor to the next option that way */
+                            if (down && !gun_in_level()) {
+                                int b = ev.cbutton.button;
+                                int dx = b == SDL_CONTROLLER_BUTTON_DPAD_LEFT ? -1 : b == SDL_CONTROLLER_BUTTON_DPAD_RIGHT ? 1 : 0;
+                                int dy = b == SDL_CONTROLLER_BUTTON_DPAD_UP ? -1 : b == SDL_CONTROLLER_BUTTON_DPAD_DOWN ? 1 : 0;
+                                float tx, ty;
+                                /* If the cursor isn't on a button yet, go to the nearest one first */
+                                float nx, ny;
+                                int on_button = ui_nav_find(g_pad_cursor_x, g_pad_cursor_y, 0, 0, &nx, &ny) &&
+                                                fabsf(nx - g_pad_cursor_x) < 6.0f && fabsf(ny - g_pad_cursor_y) < 6.0f;
+                                if (!on_button && ui_nav_find(g_pad_cursor_x, g_pad_cursor_y, 0, 0, &tx, &ty)) {
+                                    g_pad_cursor_x = tx;
+                                    g_pad_cursor_y = ty;
+                                } else if (ui_nav_find(g_pad_cursor_x, g_pad_cursor_y, dx, dy, &tx, &ty)) {
+                                    g_pad_cursor_x = tx;
+                                    g_pad_cursor_y = ty;
+                                }
+                            }
+                            break;
                         case SDL_CONTROLLER_BUTTON_B:
                         case SDL_CONTROLLER_BUTTON_BACK:
                         case SDL_CONTROLLER_BUTTON_START:
@@ -841,17 +905,16 @@ int main(int argc, char *argv[]) {
             }
         }
         
-        /* Keep the mouse-aim direction tracking the player as they move */
-        if (g_mouse_aim_firing) {
-            update_aim_stick();
+        /* Sticks are polled every loop: held keys / buttons, the mouse-aim
+         * direction following the player, and menu <-> level switches */
+        update_wasd_stick();
+        update_aim_stick();
+        if (g_direct_sticks && gun_in_level()) {
+            gun_set_sticks(g_move_vx, -g_move_vy, g_aim_vx, -g_aim_vy); /* game: y up */
         }
         
         if (g_gamepad) {
             bool in_level = gun_in_level();
-            /* Sticks and triggers are polled every loop so held input and the
-             * switch between menus and levels are handled */
-            update_wasd_stick();
-            update_aim_stick();
             
             /* Menu cursor: left stick or D-pad */
             if (g_pad_cursor_x < 0.0f) {
@@ -861,10 +924,6 @@ int main(int argc, char *argv[]) {
             if (!in_level) {
                 float x, y;
                 pad_stick(SDL_CONTROLLER_AXIS_LEFTX, SDL_CONTROLLER_AXIS_LEFTY, &x, &y);
-                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_UP)) y -= 0.5f;
-                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) y += 0.5f;
-                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) x -= 0.5f;
-                if (SDL_GameControllerGetButton(g_gamepad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) x += 0.5f;
                 if (x != 0.0f || y != 0.0f) {
                     /* squared response: fine control near centre, fast at full tilt */
                     float step = PAD_CURSOR_SPEED * (float)g_win_h * 0.010f * 1.6f; /* loop ~10 ms */

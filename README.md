@@ -39,13 +39,15 @@ Instead of rewriting or recreating the game in Unity or another engine, this pro
 | **Move** | `W` `A` `S` `D` | — | Left Stick / D-Pad |
 | **Aim & Shoot** | Arrow Keys / `I` `J` `K` `L` | Hold Left Button (aims at cursor) | Right Stick |
 | **Shoot ahead** | — | — | Right Trigger (fires the way you're moving; hold Left Trigger to strafe) |
-| **Menu Cursor** | — | Move | Left Stick / D-Pad moves an on-screen cursor |
+| **Menu Cursor** | — | Move | D-Pad jumps between options; Left Stick moves a free cursor |
 | **Menu Select / Tap** | — | Left Click (Right Click on in-game HUD) | A |
 | **Action / Confirm** | `Space` / `Enter` | — | A (in a level) |
 | **Back / Pause** | `Escape` | — | B / Start / View |
 | **Fullscreen** | `F11` / `Alt+Enter` | — | — |
 
 Controllers rumble on shots (scaled by the weapon), when you take a hit, and when you die. Sticks use a radial deadzone, so small tilts give fine movement without snapping to the axes.
+
+In a level, keyboard, mouse aim and controller input are written straight into the game's stick state as exact vectors (the same path the engine's own gamepad support uses), rather than by emulating touches on the on-screen virtual sticks. `--touch-sticks` restores the old touch emulation.
 
 --- | :--- | :--- | :--- |
 | **Move** | `W` `A` `S` `D` | — | Left Analog Stick |
