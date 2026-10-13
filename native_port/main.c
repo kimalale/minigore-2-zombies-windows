@@ -16,6 +16,7 @@
 #include "watchdog.h"
 #include "ai_core.h"
 #include "ai_hooks.h"
+#include "gun_hooks.h"
 
 typedef void (*android_main_fn)(struct android_app *state);
 
@@ -40,6 +41,13 @@ static float g_mouse_y = 0.0f;
 
 static SDL_GameController *g_gamepad = NULL;
 
+/* Mouse aim: while a level is in play, holding the left button aims the
+ * virtual aim stick from the player towards the cursor (and so fires). */
+static bool g_mouse_aim_firing = false;
+static float g_mouse_aim_dx = 1.0f;
+static float g_mouse_aim_dy = 0.0f;
+static GunConfig g_guns;
+
 /* Video settings (overridable from the command line) */
 typedef struct {
     int width;
@@ -62,12 +70,18 @@ static void print_usage(const char *exe) {
     printf("  --ai-spread <f>   How strongly zombies spread out from each other, 0-2 (default 0.4)\n");
     printf("  --ai-no-throwers  Throwers walk straight in as before\n");
     printf("  --ai-no-bosses    Bosses and minions don't coordinate\n");
+    printf("  --no-mouse-aim    Left mouse button acts as a touch, as before\n");
+    printf("  --gun-kick <f>    Camera recoil strength, 0-2 (default 1)\n");
+    printf("  --gun-damage <f>  Player gun damage multiplier, 0.5-3 (default 1.2)\n");
+    printf("  --gun-ammo <f>    Ammo per pickup multiplier, 0.5-3 (default 1.3)\n");
+    printf("  --no-smart-aim    Original aim assist (nearest enemy)\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
 }
 
 static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     AiConfig ai;
     ai_config_default(&ai);
+    gun_config_default(&g_guns);
     cfg->width = 1280;
     cfg->height = 720;
     cfg->fullscreen = 0;
@@ -107,6 +121,16 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             ai.ranged_tactics = 0;
         } else if (strcmp(arg, "--ai-no-bosses") == 0) {
             ai.boss_tactics = 0;
+        } else if (strcmp(arg, "--no-mouse-aim") == 0) {
+            g_guns.mouse_aim = 0;
+        } else if (strcmp(arg, "--gun-kick") == 0 && has_val) {
+            g_guns.kick = (float)atof(argv[++i]);
+        } else if (strcmp(arg, "--gun-damage") == 0 && has_val) {
+            g_guns.damage = (float)atof(argv[++i]);
+        } else if (strcmp(arg, "--gun-ammo") == 0 && has_val) {
+            g_guns.ammo = (float)atof(argv[++i]);
+        } else if (strcmp(arg, "--no-smart-aim") == 0) {
+            g_guns.smart_autoaim = 0;
         } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -130,6 +154,13 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     if (ai.separation < 0.0f) ai.separation = 0.0f;
     if (ai.separation > 2.0f) ai.separation = 2.0f;
     ai_set_config(&ai);
+    
+    if (g_guns.kick < 0.0f) g_guns.kick = 0.0f;
+    if (g_guns.kick > 2.0f) g_guns.kick = 2.0f;
+    if (g_guns.damage < 0.5f) g_guns.damage = 0.5f;
+    if (g_guns.damage > 3.0f) g_guns.damage = 3.0f;
+    if (g_guns.ammo < 0.5f) g_guns.ammo = 0.5f;
+    if (g_guns.ammo > 3.0f) g_guns.ammo = 3.0f;
     return 1;
 }
 
@@ -245,6 +276,25 @@ static void update_aim_stick(void) {
         if (abs(ax) > 8000 || abs(ay) > 8000) {
             dx = (float)ax / 32767.0f;
             dy = (float)ay / 32767.0f;
+        }
+    }
+    
+    /* Mouse aim: point the stick from the player towards the cursor */
+    if (g_mouse_aim_firing) {
+        float px, py;
+        if (gun_player_screen_pos(&px, &py)) {
+            int mx, my;
+            SDL_GetMouseState(&mx, &my);
+            float vx = (float)mx - px, vy = (float)my - py;
+            float vl = sqrtf(vx * vx + vy * vy);
+            if (vl > 8.0f) { /* keep the last direction when the cursor is on the player */
+                g_mouse_aim_dx = vx / vl;
+                g_mouse_aim_dy = vy / vl;
+            }
+            dx = g_mouse_aim_dx;
+            dy = g_mouse_aim_dy;
+        } else {
+            g_mouse_aim_firing = false; /* level ended or paused */
         }
     }
     
@@ -462,6 +512,7 @@ int main(int argc, char *argv[]) {
     elf_init(&mod);
     
     ai_hooks_install(&mod);
+    gun_hooks_install(&mod, &g_guns);
     watchdog_start(&mod);
     watchdog_register_thread(GetCurrentThread(), "main");
     
@@ -516,7 +567,16 @@ int main(int argc, char *argv[]) {
                     break;
                     
                 case SDL_MOUSEBUTTONDOWN:
-                    if (ev.button.button == SDL_BUTTON_LEFT) {
+                    if (ev.button.button == SDL_BUTTON_LEFT && !g_mouse_active) {
+                        float px, py;
+                        if (gun_player_screen_pos(&px, &py)) {
+                            g_mouse_aim_firing = true;
+                            update_aim_stick();
+                            break;
+                        }
+                    }
+                    /* Left button in menus, right button anywhere: touch the screen */
+                    if ((ev.button.button == SDL_BUTTON_LEFT || ev.button.button == SDL_BUTTON_RIGHT) && !g_mouse_active) {
                         g_mouse_active = true;
                         g_mouse_x = (float)ev.button.x;
                         g_mouse_y = (float)ev.button.y;
@@ -532,7 +592,12 @@ int main(int argc, char *argv[]) {
                     break;
                     
                 case SDL_MOUSEBUTTONUP:
-                    if (ev.button.button == SDL_BUTTON_LEFT) {
+                    if (ev.button.button == SDL_BUTTON_LEFT && g_mouse_aim_firing) {
+                        g_mouse_aim_firing = false;
+                        update_aim_stick();
+                        break;
+                    }
+                    if ((ev.button.button == SDL_BUTTON_LEFT || ev.button.button == SDL_BUTTON_RIGHT) && g_mouse_active) {
                         g_mouse_active = false;
                         g_mouse_x = (float)ev.button.x;
                         g_mouse_y = (float)ev.button.y;
@@ -635,6 +700,11 @@ int main(int argc, char *argv[]) {
                 default:
                     break;
             }
+        }
+        
+        /* Keep the mouse-aim direction tracking the player as they move */
+        if (g_mouse_aim_firing) {
+            update_aim_stick();
         }
         
         if (android_app_is_destroy_requested()) {

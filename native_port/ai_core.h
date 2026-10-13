@@ -47,6 +47,10 @@ const AiConfig *ai_get_config(void);
 AiVec2 ai_follow_target(uintptr_t enemy_id, AiRole role, AiVec2 zpos, float zradius,
                         float attack_radius, AiVec2 ppos, double now_s);
 
+/* Role of an enemy that has followed the player recently (for aim
+ * assist). Returns 0 if it isn't tracked. */
+int ai_lookup_role(uintptr_t enemy_id, AiRole *role);
+
 /* Forget all tracked state (level change / tests). */
 void ai_reset(void);
 

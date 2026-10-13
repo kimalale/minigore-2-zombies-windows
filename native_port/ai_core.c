@@ -147,6 +147,16 @@ static float wrap_angle(float a) {
     return a;
 }
 
+int ai_lookup_role(uintptr_t enemy_id, AiRole *role) {
+    for (int i = 0; i < g_tracked_count; i++) {
+        if (g_tracked[i].id == enemy_id) {
+            *role = g_tracked[i].role;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int is_fresh(const Tracked *t, double now) {
     return now - t->last_t <= FRESH_SECONDS;
 }
