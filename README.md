@@ -170,13 +170,13 @@ At the defaults the stream needs roughly 8-12 Mbit/s of upload from the host; `-
 
 ---
 
-## Troubleshooting Freezes
+## Troubleshooting Freezes and Crashes
 
-A watchdog thread monitors presented frames. If the game stops drawing for 6 seconds while the window is focused, it writes `hang_report.txt` (also printed to the console) with:
+A watchdog thread monitors presented frames. If the game stops drawing while the window is focused (for 10 seconds during play, or 60 seconds while starting up, when the graphics driver may be compiling shaders), it writes `hang_report.txt` (also printed to the console) with:
 - live host mutex / condition variable counts and the input queue depth
 - every game thread's registers and a stack scan symbolized against `libminigore2.so` (mangled C++ names; pipe through `c++filt` to demangle)
 
-Please attach `hang_report.txt` when reporting a freeze. A report can also appear during an unusually long level load; that is harmless.
+If the game crashes, `crash_report.txt` records the exception, where it happened and the registers. Please attach whichever file appears when reporting a problem.
 
 ---
 

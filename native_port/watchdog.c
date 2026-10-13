@@ -15,7 +15,9 @@
  * hang_report.txt. Addresses are symbolized against the ELF dynamic symbol
  * table (mangled C++ names; pipe through c++filt to demangle). */
 
-#define HANG_SECONDS       6
+#define HANG_SECONDS       10   /* during play */
+#define LOAD_HANG_SECONDS  60   /* first frames: shader compilation and loading */
+#define LOADING_FRAMES     300  /* ~5 s of presented frames */
 #define MAX_WD_THREADS     64
 #define STACK_SCAN_BYTES   (64 * 1024)
 #define MAX_STACK_FRAMES   24
@@ -94,6 +96,8 @@ void watchdog_set_focused(int focused) {
 }
 
 /* "symbol+0xoff" for addresses inside the game library, else module+offset */
+void watchdog_describe_address(uint32_t addr, char *out, size_t out_size);
+
 static void describe_address(uint32_t addr, char *out, size_t out_size) {
     uintptr_t base = g_mod ? (uintptr_t)g_mod->base : 0;
     if (g_mod && addr >= base && addr < base + g_mod->size) {
@@ -204,7 +208,8 @@ static void write_report(void) {
     for (int o = 0; o < 2; o++) {
         if (!outs[o]) continue;
         fprintf(outs[o], "\n================ HANG DETECTED ================\n");
-        fprintf(outs[o], "No frame presented for %d s (frame %ld) at %s", HANG_SECONDS, g_frames, ctime(&now));
+        fprintf(outs[o], "No frame presented for %d s (frame %ld) at %s",
+                g_frames < LOADING_FRAMES ? LOAD_HANG_SECONDS : HANG_SECONDS, g_frames, ctime(&now));
         fprintf(outs[o], "Host sync objects: %ld mutexes, %ld condition variables\n", mutexes, conds);
         fprintf(outs[o], "Input queue depth: %d\n", android_app_input_queue_depth());
         if (g_mod) fprintf(outs[o], "libminigore2.so loaded at %p\n", g_mod->base);
@@ -242,7 +247,8 @@ static DWORD WINAPI watchdog_proc(LPVOID unused) {
             reported = 0;
             continue;
         }
-        if (++stalled_seconds >= HANG_SECONDS && !reported) {
+        int limit = frames < LOADING_FRAMES ? LOAD_HANG_SECONDS : HANG_SECONDS;
+        if (++stalled_seconds >= limit && !reported) {
             write_report();
             reported = 1; /* once per stall */
         }
@@ -255,6 +261,11 @@ void watchdog_start(const elf_module_t *mod) {
     wd_lock_init();
     HANDLE h = CreateThread(NULL, 0, watchdog_proc, NULL, 0, NULL);
     if (h) CloseHandle(h);
-    printf("[Watchdog] Hang detection enabled (%d s)\n", HANG_SECONDS);
+    printf("[Watchdog] Hang detection enabled (%d s in play, %d s while starting up)\n",
+           HANG_SECONDS, LOAD_HANG_SECONDS);
     fflush(stdout);
+}
+
+void watchdog_describe_address(uint32_t addr, char *out, size_t out_size) {
+    describe_address(addr, out, out_size);
 }
