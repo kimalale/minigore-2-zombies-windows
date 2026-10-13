@@ -171,6 +171,26 @@ run.bat --join 203.0.113.7
 
 At the defaults the stream needs roughly 8-12 Mbit/s of upload from the host; `--coop-width 640 --coop-quality 45` brings that to about 3-4 Mbit/s.
 
+### Own-World Co-op (each player runs the game)
+
+Instead of streaming video, both PCs run the full game and only controller input is sent (a few hundred bytes per frame). Each player gets full resolution, full frame rate and their own sound, with no compression artefacts, and it needs almost no bandwidth.
+
+**Host (player 1):**
+```cmd
+run.bat --lockstep-host
+```
+**Friend (player 2)**, with the host's IP address:
+```cmd
+run.bat --lockstep-join 203.0.113.7
+```
+
+- The host waits for player 2 before the game starts, then sends its saves and settings so both games start identically. Player 2's own saves are not touched; their copy lives in `saves_lockstep\`.
+- Once a level starts, player 2 appears as an extra character in **both** worlds. The host sees it beside them; player 2's screen follows player 2. Both screens show both players' health bars (`P1` / `P2`, with `YOU` on yours) and a marker over your partner, or an arrow at the screen edge pointing to them when they're off-screen.
+- The host drives the menus (player 2 sees them too). Each player's input takes effect after a short delay of 4 frames (67 ms) on both PCs, which hides the network delay. On a slow or distant connection, raise it with `--lockstep-delay 6` (host). If a game hitches, the other waits for it.
+- Both games compare a fingerprint of their worlds every second. If they ever differ, `OUT OF SYNC` appears on screen and `game_log.txt` says what differed. Please report it.
+- Both PCs need the same build and game files (checked when connecting). Player 2's window takes the host's window size, and the window can't be resized during the session. If either player quits, the other carries on alone.
+- Uses the same port (TCP 27015) and `--code` as streamed co-op.
+
 ---
 
 ## Determinism Test

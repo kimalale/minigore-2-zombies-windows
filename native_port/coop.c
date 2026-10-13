@@ -3,6 +3,9 @@
 #include "net_host.h"
 #include "gun_hooks.h"
 #include "gl_wrap.h"
+#include "egl_wrap.h"
+#include "determinism.h"
+#include "lockstep.h"
 #include <windows.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
@@ -32,7 +35,17 @@
  * HUD, the menu GUI and the per-frame GUI renderer cleanup are skipped in
  * that pass. The guest is streamed this view, so each player has their
  * own screen and can roam the map; zombies chase whichever player is
- * closer (see ai_hooks.c). */
+ * closer (see ai_hooks.c).
+ *
+ * Own-world co-op (lockstep.c): both PCs run this same logic on the same
+ * inputs, so player 2 spawns, moves and fights identically in both
+ * worlds. Everything here that affects the game then runs on the virtual
+ * clock. The host plays with its normal single view. The guest's screen
+ * follows player 2: StateGame::draw runs first with the camera on player
+ * 2, without player 1's HUD and with the random generators restored after
+ * it; then again exactly as on the host (same camera, same dt), but into
+ * an off-screen framebuffer, with only its HUD / menus routed to the
+ * window. The game's own state therefore advances as on the host. */
 
 #define ENV_PLAYER           0x1f4fa0  /* Character* the camera / horde follow */
 #define ENV_CHARACTERS       0x1f4f1c  /* Character* [32], player-side characters */
@@ -105,6 +118,16 @@ static GLuint g_view_fb, g_view_color, g_view_depth;
 static int g_view_w, g_view_h, g_view_failed;
 static DWORD g_p2_dead_since = 0;
 static DWORD g_next_spawn = 0;
+static int g_hud_to_window = 0;     /* guest: HUD of the host-identical pass goes to the window */
+
+/* Game-thread time for spawns: virtual during own-world co-op */
+static DWORD coop_now_ms(void) {
+    return det_active() ? (DWORD)(det_now_ns() / 1000000ULL) : GetTickCount();
+}
+
+static int guest_connected(void) {
+    return lockstep_active() ? 1 : net_host_guest_connected();
+}
 
 static uint8_t *env(void) {
     return g_env ? *g_env : NULL;
@@ -153,13 +176,17 @@ static void coop_tick(void) {
     uint8_t *e = env();
     uint8_t *player = e ? *(uint8_t **)(e + ENV_PLAYER) : NULL;
     int in_level = gun_in_level();
-    DWORD now = GetTickCount();
+    DWORD now = coop_now_ms();
 
     if (g_p2 && !character_listed(e, g_p2)) g_p2 = NULL; /* removed by the game */
     g_p2_live = NULL;
 
-    if (!player || !in_level || !net_host_guest_connected()) {
+    if (!player || !in_level || !guest_connected()) {
         g_p2_live = NULL;
+        if (lockstep_active()) {
+            egl_overlay_set_coop(NULL);
+            return;
+        }
         net_host_set_p2(0.5f, 0.5f, 0, in_level);
         net_host_set_p2_status(0.0f, 0);
         return;
@@ -197,6 +224,7 @@ static void coop_tick(void) {
 
     uint8_t *p2 = live_p2(e);
     g_p2_live = p2;
+    if (lockstep_active()) return; /* nothing is streamed */
     net_host_set_p2_status(p2 ? p2_health_fraction(p2) : 0.0f, g_split_view && p2 != NULL);
     /* Where player 2 is on screen, so the guest can mouse-aim from it. In
      * split view this is measured during player 2's own render pass. */
@@ -215,10 +243,25 @@ static int __attribute__((cdecl)) h_state_update(void *self, float dt) {
     return o_state_update(self, dt);
 }
 
+/* Player 2's input this frame: the guest's sticks (own-world co-op, the
+ * same on both PCs) or the latest streamed input */
+static int p2_input(MsgInput *in) {
+    if (!lockstep_active()) return net_host_get_input(in, INPUT_TIMEOUT_MS);
+    float s[4];
+    if (!lockstep_p2_sticks(s)) return 0;
+    in->move_x = s[0];
+    in->move_y = s[1];
+    in->aim_x = s[2];
+    in->aim_y = s[3];
+    in->fire = 1; /* twin-stick: aiming fires */
+    in->buttons = 0;
+    return 1;
+}
+
 static int __attribute__((cdecl)) h_companion_update(void *self, float dt, void *character) {
     MsgInput in;
     uint8_t *e = env();
-    if (e && g_p2 && character == (void *)g_p2 && g_human_update && net_host_get_input(&in, INPUT_TIMEOUT_MS)) {
+    if (e && g_p2 && character == (void *)g_p2 && g_human_update && p2_input(&in)) {
         uint8_t saved_sticks[16], saved_shoot[12];
         uint8_t saved_auto_aim = e[ENV_AUTO_AIM];
         memcpy(saved_sticks, e + ENV_STICKS, sizeof(saved_sticks));
@@ -247,6 +290,7 @@ static int __attribute__((cdecl)) h_companion_update(void *self, float dt, void 
  * spread out */
 static int coop_camera(float eye[3], float look[3]) {
     if (!g_p2 || !gun_in_level()) return 0;
+    if (lockstep_active() && !g_in_p2_pass) return 0; /* player 1's camera, as on the host */
     uint8_t *e = env();
     uint8_t *player = e ? *(uint8_t **)(e + ENV_PLAYER) : NULL;
     uint8_t *p2 = live_p2(e);
@@ -327,8 +371,79 @@ static int view_target_ready(int w, int h) {
     return 1;
 }
 
+/* Own-world co-op overlay: both players' health and where they are on
+ * this PC's screen (call right after the pass drawn to the window) */
+static void publish_overlay(void) {
+    uint8_t *e = env();
+    uint8_t *player = e ? *(uint8_t **)(e + ENV_PLAYER) : NULL;
+    EglCoopOverlay o;
+    memset(&o, 0, sizeof(o));
+    if (!player || !gun_in_level()) {
+        egl_overlay_set_coop(NULL);
+        return;
+    }
+    o.visible = 1;
+    o.local = lockstep_is_guest() ? 1 : 0;
+    o.out_of_sync = lockstep_out_of_sync();
+    uint8_t *chars[2] = { player, (g_p2 && character_listed(e, g_p2)) ? g_p2 : NULL };
+    for (int i = 0; i < 2; i++) {
+        uint8_t *c = chars[i];
+        if (!c) {
+            o.p[i].present = i == 1; /* player 2 is coming back */
+            continue;
+        }
+        o.p[i].present = 1;
+        o.p[i].alive = character_alive(c);
+        o.p[i].health = p2_health_fraction(c);
+        const float *p = (const float *)(c + ENTITY_POS);
+        o.p[i].on_screen_valid = gun_project_ground(p[0], p[1], &o.p[i].sx, &o.p[i].sy);
+    }
+    egl_overlay_set_coop(&o);
+}
+
+static void route_hud_to_window(int on) {
+    GLuint fb = on ? 0 : g_view_fb;
+    gl_wrap_set_default_framebuffer(fb);
+    gl_bind_fb(CO_GL_FRAMEBUFFER, fb);
+}
+
+/* Guest: player 2's view to the window, then the host-identical pass
+ * off-screen with its HUD / menus routed to the window */
+static void lockstep_guest_draw(void *self, float dt, uint8_t *p2) {
+    DetRng rng;
+    det_rng_save(&rng);
+    g_in_p2_pass = 1;
+    o_draw(self, 0.0f);
+    const float *p = (const float *)(p2 + ENTITY_POS);
+    float sx, sy;
+    if (gun_project_ground(p[0], p[1], &sx, &sy)) gun_set_aim_origin(sx, sy); /* mouse aim from player 2 */
+    publish_overlay();
+    g_in_p2_pass = 0;
+    det_rng_restore(&rng);
+
+    g_hud_to_window = 1;
+    gl_wrap_set_default_framebuffer(g_view_fb);
+    gl_bind_fb(CO_GL_FRAMEBUFFER, g_view_fb);
+    o_draw(self, dt);
+    gl_wrap_set_default_framebuffer(0);
+    gl_bind_fb(CO_GL_FRAMEBUFFER, 0);
+    g_hud_to_window = 0;
+}
+
 static void __attribute__((cdecl)) h_draw(void *self, float dt) {
     uint8_t *p2 = g_p2_live;
+    if (lockstep_active()) {
+        int w = 0, h = 0;
+        SDL_Window *win = SDL_GL_GetCurrentWindow();
+        if (win) SDL_GL_GetDrawableSize(win, &w, &h);
+        if (lockstep_is_guest() && p2 && w > 0 && view_target_ready(w, h)) {
+            lockstep_guest_draw(self, dt, p2);
+        } else {
+            o_draw(self, dt);
+            publish_overlay();
+        }
+        return;
+    }
     int w = 0, h = 0;
     SDL_Window *win = SDL_GL_GetCurrentWindow();
     if (win) SDL_GL_GetDrawableSize(win, &w, &h);
@@ -356,15 +471,23 @@ static void __attribute__((cdecl)) h_draw(void *self, float dt) {
 }
 
 /* Player 1's HUD and the GUI are left out of player 2's pass; the per-frame
- * GUI renderer cleanup must only run after player 1's pass. */
-static void __attribute__((cdecl)) h_draw_hud(void *a) { if (!g_in_p2_pass) o_draw_hud(a); }
-static void __attribute__((cdecl)) h_draw_tutorials(void *a) { if (!g_in_p2_pass) o_draw_tutorials(a); }
-static void __attribute__((cdecl)) h_draw_vignette(void *a) { if (!g_in_p2_pass) o_draw_vignette(a); }
+ * GUI renderer cleanup must only run after player 1's pass. In the own-world
+ * guest's off-screen pass they are drawn to the window instead. */
+#define HUD_HOOK(call)                              \
+    do {                                            \
+        if (g_in_p2_pass) return;                   \
+        if (g_hud_to_window) route_hud_to_window(1);\
+        call;                                       \
+        if (g_hud_to_window) route_hud_to_window(0);\
+    } while (0)
+static void __attribute__((cdecl)) h_draw_hud(void *a) { HUD_HOOK(o_draw_hud(a)); }
+static void __attribute__((cdecl)) h_draw_tutorials(void *a) { HUD_HOOK(o_draw_tutorials(a)); }
+static void __attribute__((cdecl)) h_draw_vignette(void *a) { HUD_HOOK(o_draw_vignette(a)); }
 static void __attribute__((cdecl)) h_delete_renderers(void *a) { if (!g_in_p2_pass) o_delete_renderers(a); }
-static void __attribute__((cdecl)) h_draw_arena_score(void) { if (!g_in_p2_pass) o_draw_arena_score(); }
-static void __attribute__((cdecl)) h_draw_score(void) { if (!g_in_p2_pass) o_draw_score(); }
-static void __attribute__((cdecl)) h_draw_gui(void *a, void *b) { if (!g_in_p2_pass) o_draw_gui(a, b); }
-static void __attribute__((cdecl)) h_draw_score_messages(void *a, void *b) { if (!g_in_p2_pass) o_draw_score_messages(a, b); }
+static void __attribute__((cdecl)) h_draw_arena_score(void) { HUD_HOOK(o_draw_arena_score()); }
+static void __attribute__((cdecl)) h_draw_score(void) { HUD_HOOK(o_draw_score()); }
+static void __attribute__((cdecl)) h_draw_gui(void *a, void *b) { HUD_HOOK(o_draw_gui(a, b)); }
+static void __attribute__((cdecl)) h_draw_score_messages(void *a, void *b) { HUD_HOOK(o_draw_score_messages(a, b)); }
 
 void coop_install(elf_module_t *mod) {
     g_env = (uint8_t **)elf_sym(mod, "m_env");
@@ -380,6 +503,10 @@ void coop_install(elf_module_t *mod) {
     o_companion_update = (ControlUpdateFn)hook_vtable(mod, "_ZTV25CharacterControlCompanion", 2, (void *)h_companion_update);
     if (o_companion_update) hook_got(mod, "_ZN25CharacterControlCompanion6updateEfP9Character", (void *)h_companion_update);
     gun_set_camera_adjust(coop_camera);
+    if (lockstep_active()) {
+        g_split_view = 1; /* the guest's own view; the host draws once */
+        if (lockstep_is_guest()) gun_set_local_character(coop_p2_live);
+    }
 
     g_get_health = (IntGetterFn)elf_sym(mod, "_ZNK9Character9getHealthEv");
     g_get_max_health = (IntGetterFn)elf_sym(mod, "_ZNK15PlayerCharacter12getMaxHealthEv");
@@ -407,7 +534,11 @@ void coop_install(elf_module_t *mod) {
         }
     }
 
-    printf("[Co-op] Player 2 joins as a companion character when a guest connects and a level is running (%s)\n",
-           g_split_view ? "own screen each" : "shared camera");
+    if (lockstep_active()) {
+        printf("[Co-op] Own-world co-op: player 2 joins both worlds as a companion when a level starts\n");
+    } else {
+        printf("[Co-op] Player 2 joins as a companion character when a guest connects and a level is running (%s)\n",
+               g_split_view ? "own screen each" : "shared camera");
+    }
     fflush(stdout);
 }

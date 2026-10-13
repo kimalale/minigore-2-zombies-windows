@@ -28,6 +28,7 @@
 #include "net_host.h"
 #include "coop.h"
 #include "guest.h"
+#include "lockstep.h"
 
 typedef void (*android_main_fn)(struct android_app *state);
 
@@ -73,6 +74,7 @@ static int g_coop_join = 0;
 static int g_coop_split = 1;
 static NetHostConfig g_host_cfg;
 static GuestConfig g_guest_cfg;
+static LockstepConfig g_ls_cfg;
 
 /* Xbox / XInput controller */
 #define PAD_DEADZONE        0.22f   /* radial, as a share of full deflection */
@@ -140,7 +142,11 @@ static void print_usage(const char *exe) {
     printf("  --coop-fps <n>    Video frame rate streamed to player 2 (default 30)\n");
     printf("  --coop-quality <n> JPEG quality 10-95 (default 60; lower for slow connections)\n");
     printf("  --coop-view <mode> split: each player has their own camera (default); shared: one camera\n");
-    printf("Determinism test (for future lockstep multiplayer):\n");
+    printf("Own-world co-op (each player runs the game; only inputs are sent - smooth and full quality):\n");
+    printf("  --lockstep-host [port]      Host; player 2 appears in your world and you in theirs\n");
+    printf("  --lockstep-join <ip[:port]> Join a host as player 2 (your window takes the host's size)\n");
+    printf("  --lockstep-delay <frames>   Host: input delay, 1-30 (default 4 = 67 ms; raise for slow links)\n");
+    printf("Determinism test (checks the game can run in lockstep):\n");
     printf("  --record <file>   Play normally; inputs and per-frame game state are recorded\n");
     printf("  --replay <file>   Replay the inputs and report any frame where the game state differs\n");
     printf("In game: F11 or Alt+Enter toggles fullscreen.\n");
@@ -152,6 +158,7 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     gun_config_default(&g_guns);
     net_host_config_default(&g_host_cfg);
     memset(&g_guest_cfg, 0, sizeof(g_guest_cfg));
+    lockstep_config_default(&g_ls_cfg);
     g_guest_cfg.port = NET_DEFAULT_PORT;
     cfg->width = 1280;
     cfg->height = 720;
@@ -216,7 +223,22 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
             memcpy(g_guest_cfg.host, target, n);
             g_guest_cfg.host[n] = '\0';
             if (colon) g_guest_cfg.port = atoi(colon + 1);
+        } else if (strcmp(arg, "--lockstep-host") == 0) {
+            g_ls_cfg.role = LS_HOST;
+            if (has_val && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9') g_ls_cfg.port = atoi(argv[++i]);
+        } else if (strcmp(arg, "--lockstep-join") == 0 && has_val) {
+            g_ls_cfg.role = LS_GUEST;
+            const char *target = argv[++i];
+            const char *colon = strrchr(target, ':');
+            size_t n = colon ? (size_t)(colon - target) : strlen(target);
+            if (n >= sizeof(g_ls_cfg.host)) n = sizeof(g_ls_cfg.host) - 1;
+            memcpy(g_ls_cfg.host, target, n);
+            g_ls_cfg.host[n] = '\0';
+            if (colon) g_ls_cfg.port = atoi(colon + 1);
+        } else if (strcmp(arg, "--lockstep-delay") == 0 && has_val) {
+            g_ls_cfg.delay = atoi(argv[++i]);
         } else if (strcmp(arg, "--code") == 0 && has_val) {
+            strncpy(g_ls_cfg.code, argv[i + 1], NET_CODE_LEN - 1);
             strncpy(g_host_cfg.code, argv[i + 1], NET_CODE_LEN - 1);
             strncpy(g_guest_cfg.code, argv[++i], NET_CODE_LEN - 1);
         } else if (strcmp(arg, "--coop-width") == 0 && has_val) {
@@ -272,6 +294,11 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
         fprintf(stderr, "Use either --host or --join, not both\n");
         return 0;
     }
+    if (g_ls_cfg.role != LS_OFF && (g_coop_host || g_coop_join || det_active())) {
+        fprintf(stderr, "Own-world co-op can't be combined with --host, --join, --record or --replay\n");
+        return 0;
+    }
+    if (g_ls_cfg.port <= 0 || g_ls_cfg.port > 65535) g_ls_cfg.port = NET_DEFAULT_PORT;
     if (g_host_cfg.port <= 0 || g_host_cfg.port > 65535) g_host_cfg.port = NET_DEFAULT_PORT;
     if (g_guest_cfg.port <= 0 || g_guest_cfg.port > 65535) g_guest_cfg.port = NET_DEFAULT_PORT;
     if (g_host_cfg.width < 320) g_host_cfg.width = 320;
@@ -280,6 +307,83 @@ static int parse_video_config(int argc, char *argv[], video_config_t *cfg) {
     if (g_host_cfg.fps > 60) g_host_cfg.fps = 60;
     if (g_host_cfg.quality < 10) g_host_cfg.quality = 10;
     if (g_host_cfg.quality > 95) g_host_cfg.quality = 95;
+    return 1;
+}
+
+/* FNV-1a of a file: both own-world co-op players must run the same game */
+static uint32_t file_hash(const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    uint32_t h = 2166136261u;
+    unsigned char buf[65536];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+        for (size_t i = 0; i < n; i++) {
+            h ^= buf[i];
+            h *= 16777619u;
+        }
+    }
+    fclose(f);
+    return h;
+}
+
+/* Own-world co-op: before the game starts, agree on everything that shapes
+ * it - the host's screen size (touches and UI layout depend on it), saves
+ * and simulation settings - then run on the shared virtual clock. */
+static int start_lockstep(video_config_t *video) {
+    MsgLsSetup setup;
+    memset(&setup, 0, sizeof(setup));
+    if (g_ls_cfg.role == LS_HOST) {
+        int w = video->width, h = video->height;
+        SDL_DisplayMode dm;
+        if (video->fullscreen && SDL_GetDesktopDisplayMode(0, &dm) == 0) {
+            w = dm.w;
+            h = dm.h;
+        }
+        const AiConfig *ai = ai_get_config();
+        setup.width = w;
+        setup.height = h;
+        setup.gun_damage = g_guns.damage;
+        setup.gun_ammo = g_guns.ammo;
+        setup.smart_autoaim = g_guns.smart_autoaim;
+        setup.ai_enabled = ai->enabled;
+        setup.ai_flank_fraction = ai->flank_fraction;
+        setup.ai_flank_degrees = ai->flank_degrees;
+        setup.ai_lead = ai->lead;
+        setup.ai_separation = ai->separation;
+        setup.ai_ranged_tactics = ai->ranged_tactics;
+        setup.ai_boss_tactics = ai->boss_tactics;
+    }
+
+    if (lockstep_connect(&g_ls_cfg, &setup, BUILD_ID, file_hash("lib/x86/libminigore2.so")) != 0) return 0;
+
+    if (g_ls_cfg.role == LS_GUEST) {
+        video->width = setup.width;
+        video->height = setup.height;
+        video->fullscreen = 0;
+        SDL_DisplayMode dm;
+        if (SDL_GetDesktopDisplayMode(0, &dm) == 0 && (dm.w < setup.width || dm.h < setup.height)) {
+            printf("[Lockstep] The host's game is %dx%d, larger than this screen (%dx%d) - ask them to use "
+                   "a smaller --width / --height\n", setup.width, setup.height, dm.w, dm.h);
+        }
+        g_guns.damage = setup.gun_damage;
+        g_guns.ammo = setup.gun_ammo;
+        g_guns.smart_autoaim = setup.smart_autoaim;
+        AiConfig ai;
+        ai_config_default(&ai);
+        ai.enabled = setup.ai_enabled;
+        ai.flank_fraction = setup.ai_flank_fraction;
+        ai.flank_degrees = setup.ai_flank_degrees;
+        ai.lead = setup.ai_lead;
+        ai.separation = setup.ai_separation;
+        ai.ranged_tactics = setup.ai_ranged_tactics;
+        ai.boss_tactics = setup.ai_boss_tactics;
+        ai_set_config(&ai);
+    }
+    /* Recoil moves player 1's camera; the guest draws twice a frame, so it
+     * would differ between the PCs */
+    g_guns.kick = 0.0f;
+    det_configure(DET_LOCKSTEP, NULL);
     return 1;
 }
 
@@ -622,6 +726,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
+    /* Own-world co-op: wait for / join the other player first */
+    if (g_ls_cfg.role != LS_OFF) {
+        if (!start_lockstep(&video)) {
+            SDL_Quit();
+            return 1;
+        }
+        g_win_w = video.width;
+        g_win_h = video.height;
+    }
+    
     /* Configure OpenGL 2.1 Compatibility Context */
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
@@ -635,13 +749,14 @@ int main(int argc, char *argv[]) {
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, video.msaa);
     }
     
-    Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    /* Own-world co-op: the game's screen size must stay the host's */
+    Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | (lockstep_active() ? 0 : SDL_WINDOW_RESIZABLE);
     if (video.fullscreen) {
         window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
     
     g_window = SDL_CreateWindow(
-        "Minigore 2: Zombies",
+        lockstep_is_guest() ? "Minigore 2: Zombies - Player 2" : "Minigore 2: Zombies",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         g_win_w, g_win_h,
         window_flags
@@ -677,7 +792,10 @@ int main(int argc, char *argv[]) {
     egl_wrap_init(g_window);
     egl_wrap_set_msaa(video.msaa > 0);
     opensles_init();
-    if (det_active()) {
+    if (lockstep_active()) {
+        /* The guest plays from the host's saves */
+        if (lockstep_data_path()) android_app_set_data_path(lockstep_data_path());
+    } else if (det_active()) {
         /* Both runs start from the same save snapshot */
         android_app_set_data_path(det_prepare_saves());
         if (g_coop_host) {
@@ -722,6 +840,8 @@ int main(int argc, char *argv[]) {
     printf("[Input] Sticks: %s\n", g_direct_sticks ? "direct (exact vectors)" : "touch emulation");
     if (g_coop_host && net_host_start(&g_host_cfg) == 0) {
         coop_set_split_view(g_coop_split);
+        coop_install(&mod);
+    } else if (lockstep_active()) {
         coop_install(&mod);
     }
     watchdog_start(&mod);
@@ -820,8 +940,8 @@ int main(int argc, char *argv[]) {
                     /* F11 / Alt+Enter: toggle fullscreen (not forwarded to the game) */
                     if (ev.key.keysym.sym == SDLK_F11 ||
                         (ev.key.keysym.sym == SDLK_RETURN && (ev.key.keysym.mod & KMOD_ALT))) {
-                        if (ev.type == SDL_KEYDOWN && !ev.key.repeat) {
-                            toggle_fullscreen();
+                        if (ev.type == SDL_KEYDOWN && !ev.key.repeat && !lockstep_active()) {
+                            toggle_fullscreen(); /* (own-world co-op: the size is fixed) */
                         }
                         break;
                     }
@@ -998,6 +1118,7 @@ int main(int argc, char *argv[]) {
         SDL_Delay(10);
     }
     
+    lockstep_shutdown(); /* tell the other player; never wait for them again */
     det_finish();
     printf("[Host] Shutting down application...\n");
     android_app_push_cmd(APP_CMD_LOST_FOCUS);

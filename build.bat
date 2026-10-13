@@ -36,6 +36,7 @@ gcc %CFLAGS% ^
     native_port\net_proto.c ^
     native_port\net_host.c ^
     native_port\coop.c ^
+    native_port\lockstep.c ^
     native_port\guest.c ^
     native_port\stb_impl.c ^
     %LDFLAGS% ^

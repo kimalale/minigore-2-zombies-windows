@@ -161,6 +161,9 @@ void android_app_push_key_event(int action, int keycode);
 void android_app_set_window_size(int width, int height);
 void android_app_set_data_path(const char *path);  /* before android_ndk_init */
 int android_app_input_queue_depth(void);
+/* Own-world co-op: the queued input events, removed from the queue */
+size_t android_app_event_size(void);
+int android_app_drain_events(void *out, int max);
 int android_app_is_destroy_requested(void);
 
 #ifdef __cplusplus
