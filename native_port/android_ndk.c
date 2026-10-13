@@ -291,14 +291,17 @@ AAsset * CDECL wrap_AAssetManager_open(AAssetManager *mgr, const char *filename,
     if (!fp) {
         /* Try without assets/ prefix */
         fp = fopen(filename, "rb");
-        if (!fp) return NULL;
+        if (!fp) {
+            printf("[Asset] Not found: %s\n", filename);
+            return NULL;
+        }
     }
     
+    /* No per-call logging here: assets (including streamed music) are read
+     * constantly, and every console line used to stall the game thread. */
     fseek(fp, 0, SEEK_END);
     long sz = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    printf("[Asset] Opening: %s -> %s\n", filename, fp ? "OK" : "NOT FOUND");
-    fflush(stdout);
     
     AAsset *asset = (AAsset *)calloc(1, sizeof(AAsset));
     asset->fp = fp;
@@ -309,31 +312,21 @@ AAsset * CDECL wrap_AAssetManager_open(AAssetManager *mgr, const char *filename,
 
 int CDECL wrap_AAsset_read(AAsset *asset, void *buf, size_t count) {
     if (!asset || !asset->fp) return -1;
-    int ret = (int)fread(buf, 1, count, asset->fp);
-    printf("[Asset] read %s: count=%zu -> %d\n", asset->filename, count, ret);
-    fflush(stdout);
-    return ret;
+    return (int)fread(buf, 1, count, asset->fp);
 }
 
 off_t CDECL wrap_AAsset_seek(AAsset *asset, off_t offset, int whence) {
     if (!asset || !asset->fp) return -1;
     fseek(asset->fp, (long)offset, whence);
-    off_t ret = (off_t)ftell(asset->fp);
-    printf("[Asset] seek %s: offset=%ld, whence=%d -> %ld\n", asset->filename, (long)offset, whence, (long)ret);
-    fflush(stdout);
-    return ret;
+    return (off_t)ftell(asset->fp);
 }
 
 off_t CDECL wrap_AAsset_getLength(AAsset *asset) {
     if (!asset) return 0;
-    printf("[Asset] getLength %s -> %zu\n", asset->filename, asset->length);
-    fflush(stdout);
     return (off_t)asset->length;
 }
 
 const void * CDECL wrap_AAsset_getBuffer(AAsset *asset) {
-    printf("[Asset] getBuffer %s (len=%zu)\n", asset ? asset->filename : "NULL", asset ? asset->length : 0);
-    fflush(stdout);
     if (!asset || !asset->fp) return NULL;
     if (!asset->buffer) {
         asset->buffer = (char *)malloc(asset->length + 1);
@@ -342,15 +335,12 @@ const void * CDECL wrap_AAsset_getBuffer(AAsset *asset) {
         size_t rd = fread(asset->buffer, 1, asset->length, asset->fp);
         asset->buffer[asset->length] = '\0';
         fseek(asset->fp, cur, SEEK_SET);
-        printf("[Asset] getBuffer read %zu bytes\n", rd);
-        fflush(stdout);
+        if (rd != asset->length) printf("[Asset] Short read of %s: %zu of %zu bytes\n", asset->filename, rd, asset->length);
     }
     return asset->buffer;
 }
 
 void CDECL wrap_AAsset_close(AAsset *asset) {
-    printf("[Asset] close %s\n", asset ? asset->filename : "NULL");
-    fflush(stdout);
     if (!asset) return;
     if (asset->fp) fclose(asset->fp);
     if (asset->buffer) free(asset->buffer);
@@ -358,8 +348,6 @@ void CDECL wrap_AAsset_close(AAsset *asset) {
 }
 
 int CDECL wrap_AAsset_openFileDescriptor(AAsset *asset, off_t *outStart, off_t *outLength) {
-    printf("[Asset] openFileDescriptor %s\n", asset ? asset->filename : "NULL");
-    fflush(stdout);
     if (!asset) return -1;
     if (outStart) *outStart = 0;
     if (outLength) *outLength = (off_t)asset->length;

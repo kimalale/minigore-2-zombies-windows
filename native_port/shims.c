@@ -1,5 +1,6 @@
 #include "shims.h"
 #include "watchdog.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -196,7 +197,7 @@ static int * CDECL shim___errno(void) {
 
 static void CDECL shim___stack_chk_fail(void) {
     printf("[FATAL] Stack check failed!\n");
-    fflush(stdout);
+    log_flush();
     ExitProcess(1);
 }
 
@@ -553,13 +554,13 @@ static void CDECL shim___cxa_finalize(void *dso_handle) {}
 
 static void CDECL shim_abort(void) {
     printf("[SHIM] abort() called!\n");
-    fflush(stdout);
+    log_flush();
     ExitProcess(1);
 }
 
 static void CDECL shim_exit(int code) {
     printf("[SHIM] exit(%d) called!\n", code);
-    fflush(stdout);
+    log_flush();
     ExitProcess(code);
 }
 

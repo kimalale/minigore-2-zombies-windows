@@ -14,6 +14,7 @@
 #include "android_ndk.h"
 #include "opensles.h"
 #include "watchdog.h"
+#include "log.h"
 #include "ai_core.h"
 #include "ai_hooks.h"
 #include "gun_hooks.h"
@@ -462,42 +463,53 @@ static void update_aim_stick(void) {
     }
 }
 
-static LONG WINAPI crash_handler(EXCEPTION_POINTERS *ep) {
+/* Vectored handler: runs first for every exception on every thread,
+ * including the many harmless first-chance ones graphics drivers raise and
+ * catch themselves (thread naming, C++ exceptions, OutputDebugString,
+ * memory probes), sometimes while holding the loader lock. So it does no
+ * I/O: it only commits stack pages on demand and otherwise passes. */
+static LONG WINAPI stack_commit_handler(EXCEPTION_POINTERS *ep) {
     if (ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
         ULONG_PTR fault_addr = ep->ExceptionRecord->ExceptionInformation[1];
         MEMORY_BASIC_INFORMATION mbi, own_stack;
-        /* Only commit on demand inside the faulting thread's own stack
-         * reservation. This used to apply to any reserved page, so a stray
-         * read into reserved heap got a zero page and the game carried on
-         * with garbage (e.g. spinning forever) instead of crashing. */
+        /* Only inside the faulting thread's own stack reservation */
         if (VirtualQuery((void *)fault_addr, &mbi, sizeof(mbi)) &&
             VirtualQuery(&own_stack, &own_stack, sizeof(own_stack)) &&
-            mbi.AllocationBase == own_stack.AllocationBase) {
-            if (mbi.State == MEM_RESERVE) {
-                /* Reserved stack page accessed past guard page - commit on demand */
-                void *page = (void *)(fault_addr & ~0xFFF);
-                VirtualAlloc(page, 64 * 1024, MEM_COMMIT, PAGE_READWRITE);
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
+            mbi.AllocationBase == own_stack.AllocationBase &&
+            mbi.State == MEM_RESERVE) {
+            void *page = (void *)(fault_addr & ~0xFFF);
+            VirtualAlloc(page, 64 * 1024, MEM_COMMIT, PAGE_READWRITE);
+            return EXCEPTION_CONTINUE_EXECUTION;
         }
     }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 
-    printf("\n================ CRASH / EXCEPTION CAUGHT ================\n");
-    printf("Exception Code: 0x%08lX\n", ep->ExceptionRecord->ExceptionCode);
-    printf("Exception Address: %p\n", ep->ExceptionRecord->ExceptionAddress);
-    if (ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
-        printf("Access Violation: %s at %p\n",
-               ep->ExceptionRecord->ExceptionInformation[0] == 0 ? "Read" :
-               ep->ExceptionRecord->ExceptionInformation[0] == 1 ? "Write" : "Execute",
-               (void *)ep->ExceptionRecord->ExceptionInformation[1]);
+/* Only exceptions nobody handled reach here: a real crash */
+static LONG WINAPI crash_handler(EXCEPTION_POINTERS *ep) {
+    char where[512];
+    watchdog_describe_address((uint32_t)(uintptr_t)ep->ExceptionRecord->ExceptionAddress, where, sizeof(where));
+    FILE *outs[2] = { stdout, fopen("crash_report.txt", "w") };
+    for (int o = 0; o < 2; o++) {
+        FILE *f = outs[o];
+        if (!f) continue;
+        fprintf(f, "\n================ CRASH ================\n");
+        fprintf(f, "Exception 0x%08lX at %p  %s\n", ep->ExceptionRecord->ExceptionCode,
+                ep->ExceptionRecord->ExceptionAddress, where);
+        if (ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
+            fprintf(f, "Access violation: %s at %p\n",
+                    ep->ExceptionRecord->ExceptionInformation[0] == 0 ? "read" :
+                    ep->ExceptionRecord->ExceptionInformation[0] == 1 ? "write" : "execute",
+                    (void *)ep->ExceptionRecord->ExceptionInformation[1]);
+        }
+        PCONTEXT ctx = ep->ContextRecord;
+        fprintf(f, "EAX %08lX EBX %08lX ECX %08lX EDX %08lX ESI %08lX EDI %08lX EBP %08lX ESP %08lX\n",
+                ctx->Eax, ctx->Ebx, ctx->Ecx, ctx->Edx, ctx->Esi, ctx->Edi, ctx->Ebp, ctx->Esp);
+        fflush(f);
+        if (o == 1) fclose(f);
     }
-    PCONTEXT ctx = ep->ContextRecord;
-    printf("EAX: 0x%08lX  EBX: 0x%08lX  ECX: 0x%08lX  EDX: 0x%08lX\n",
-           ctx->Eax, ctx->Ebx, ctx->Ecx, ctx->Edx);
-    printf("ESI: 0x%08lX  EDI: 0x%08lX  EBP: 0x%08lX  ESP: 0x%08lX\n",
-           ctx->Esi, ctx->Edi, ctx->Ebp, ctx->Esp);
-    printf("EIP: 0x%08lX\n", ctx->Eip);
-    fflush(stdout);
+    printf("[Crash] Details written to crash_report.txt\n");
+    log_flush();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -525,7 +537,11 @@ static DWORD WINAPI game_thread_proc(LPVOID data) {
 }
 
 int main(int argc, char *argv[]) {
-    AddVectoredExceptionHandler(1, crash_handler);
+    /* Everything printed also goes to game_log.txt; the console can never
+     * stall the game */
+    log_init("game_log.txt");
+    AddVectoredExceptionHandler(1, stack_commit_handler);
+    SetUnhandledExceptionFilter(crash_handler);
     
     video_config_t video;
     if (!parse_video_config(argc, argv, &video)) {
@@ -926,5 +942,6 @@ int main(int argc, char *argv[]) {
     SDL_Quit();
     
     printf("[Host] Exited cleanly.\n");
+    log_flush();
     return 0;
 }

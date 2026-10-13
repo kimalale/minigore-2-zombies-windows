@@ -23,6 +23,9 @@ void watchdog_frame(void);
 /* The game legitimately stops presenting while unfocused / paused. */
 void watchdog_set_focused(int focused);
 
+/* "libminigore2.so!symbol+0x12", "module.dll+0x34" or a raw address. */
+void watchdog_describe_address(uint32_t addr, char *out, size_t out_size);
+
 #ifdef __cplusplus
 }
 #endif
