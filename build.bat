@@ -7,7 +7,12 @@ echo =========================================================
 
 set PATH=C:\msys64\mingw32\bin;%PATH%
 
-set CFLAGS=-O2 -Wall -Wno-unused-function -Wno-unused-variable -I native_port -I C:\msys64\mingw32\include
+rem Stamp the build with the git commit so logs show which code is running
+set BUILD_ID=unknown
+for /f %%i in ('git rev-parse --short HEAD 2^>nul') do set BUILD_ID=%%i
+git diff --quiet 2>nul || set BUILD_ID=%BUILD_ID%+local
+
+set CFLAGS=-O2 -Wall -Wno-unused-function -Wno-unused-variable -I native_port -I C:\msys64\mingw32\include -DBUILD_ID=\"%BUILD_ID%\"
 set LDFLAGS=-L C:\msys64\mingw32\lib -Wl,--stack=16777216 -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lws2_32 -lwinmm -lm
 
 echo Compiling native host sources...

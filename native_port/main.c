@@ -7,6 +7,10 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 
+#ifndef BUILD_ID
+#define BUILD_ID "dev"
+#endif
+
 #include "elf_loader.h"
 #include "shims.h"
 #include "gl_wrap.h"
@@ -562,6 +566,7 @@ int main(int argc, char *argv[]) {
     
     printf("====================================================\n");
     printf("  Minigore 2: Zombies - Native Windows Recompilation\n");
+    printf("  Build %s, compiled %s %s\n", BUILD_ID, __DATE__, __TIME__);
     printf("  Direct Android x86 ELF Loader under WOW64\n");
     printf("====================================================\n\n");
     fflush(stdout);
