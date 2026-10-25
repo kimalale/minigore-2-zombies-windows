@@ -444,25 +444,8 @@ static void check_hashes(void) {
     LeaveCriticalSection(&g_lock);
 }
 
-/* The virtual clock advances 1/60 s per frame whatever the real rate, so
- * hold each frame to real time too (VSync alone runs fast on 120/144 Hz
- * screens or with VSync off). Deadlines are absolute, without drift; after
- * a stall (loading, waiting for the network) we restart rather than catch up. */
-static void pace_frame(void) {
-    static LARGE_INTEGER freq, next;
-    LARGE_INTEGER now;
-    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&now);
-    LONGLONG period = freq.QuadPart / 60;
-    if (!next.QuadPart || now.QuadPart - next.QuadPart > period * 4) next = now;
-    LONGLONG wait = next.QuadPart - now.QuadPart;
-    if (wait > 0) Sleep((DWORD)(wait * 1000 / freq.QuadPart)); /* 1 ms timer resolution: shims.c */
-    next.QuadPart += period;
-}
-
 void lockstep_frame_end(uint32_t next, const MsgLsHash *fp) {
     if (g_role == LS_OFF) return;
-    pace_frame();
 
     /* This frame's fingerprint, compared once the other side's arrives */
     if (fp) {

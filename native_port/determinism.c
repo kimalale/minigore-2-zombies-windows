@@ -432,9 +432,26 @@ void det_set_screen(int w, int h) {
     }
 }
 
+/* The virtual clock advances 1/60 s per frame whatever the real rate, so
+ * hold each frame to real time too (VSync alone runs fast on 120/144 Hz
+ * screens or with VSync off). Deadlines are absolute, without drift; after
+ * a stall (loading, waiting for the network) we restart rather than catch up. */
+static void pace_frame(void) {
+    static LARGE_INTEGER freq, next;
+    LARGE_INTEGER now;
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&now);
+    LONGLONG period = freq.QuadPart / 60;
+    if (!next.QuadPart || now.QuadPart - next.QuadPart > period * 4) next = now;
+    LONGLONG wait = next.QuadPart - now.QuadPart;
+    if (wait > 0) Sleep((DWORD)(wait * 1000 / freq.QuadPart)); /* 1 ms timer resolution: shims.c */
+    next.QuadPart += period;
+}
+
 void det_frame_end(void) {
     if (g_mode == DET_OFF) return;
     if (!g_game_thread) g_game_thread = GetCurrentThreadId();
+    if (g_mode != DET_REPLAY) pace_frame(); /* replay runs unattended, as fast as it can */
 
     if (g_mode == DET_LOCKSTEP) {
         /* Compare worlds once a second; the frame ends when both players'
